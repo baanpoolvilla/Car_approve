@@ -9,7 +9,7 @@
     "lint": "next lint",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "db:seed": "node --env-file=.env.local scripts/seed.mjs",
-    "db:setup": "npm run db:migrate && npm run db:seed"
+    "db:setup": "npm run db:migrate"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

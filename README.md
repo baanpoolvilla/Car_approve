@@ -41,36 +41,56 @@ Vercel → project `carapprove` → **Settings → Environment Variables** เ�
 
 ### 1.3 สร้างตารางและข้อมูลตั้งต้น
 
-รันจากเครื่องตัวเอง (ครั้งเดียว) ที่โฟลเดอร์โปรเจกต์
+ฐานข้อมูล Neon ที่เพิ่งสร้างยังว่างเปล่า ต้องสร้างตารางก่อน เลือกทางใดทางหนึ่ง
+
+#### ทาง A — รันจากเครื่องตัวเอง (แนะนำ)
 
 ```bash
 npm install
 cp .env.example .env.local
 ```
 
-เปิดไฟล์ `.env.local` แล้ววาง connection string ลงในบรรทัด `DATABASE_URL` จากนั้น
+เปิด `.env.local` วาง connection string ลงบรรทัด `DATABASE_URL` แล้ว
 
 ```bash
 npm run db:setup
 ```
 
-ควรเห็นผลลัพธ์ประมาณนี้
+ควรเห็น
 
 ```
 - apply 0000_init.sql ... ok
 - apply 0001_pin_auth.sql ... ok
+- apply 0002_seed.sql ... ok
 Migrations complete.
-Seeded 13 users.
-Seeded 2 vehicles.
-Seeded 10 checklist items.
-Seed complete.
 ```
 
-เสร็จแล้วเปิด https://carapprove.vercel.app ได้เลย
+#### ทาง B — วาง SQL ใน Neon Console (ไม่ต้องใช้ terminal)
 
-> **ทางเลือก** ถ้าไม่อยากรันจากเครื่อง: เปิด Neon Console → **SQL Editor**
-> วางเนื้อหาไฟล์ `drizzle/0000_init.sql` แล้ว Run ตามด้วย `drizzle/0001_pin_auth.sql`
-> แต่ข้อมูลตั้งต้น (ผู้ใช้ 13 คน, รถ 2 คัน, checklist) ยังต้องรัน `npm run db:seed` อยู่ดี
+Neon Console → เมนูซ้าย **SQL Editor** → เปิดไฟล์ในโปรเจกต์แล้วคัดลอกทั้งไฟล์
+มาวางแล้วกด **Run** ทีละไฟล์ **ตามลำดับ**
+
+1. `drizzle/0000_init.sql` — สร้าง enum, ตาราง, index, constraint กันจองซ้อน
+2. `drizzle/0001_pin_auth.sql` — คอลัมน์สำหรับรหัส 6 หลัก
+3. `drizzle/0002_seed.sql` — ผู้ใช้ 13 คน, รถ 2 คัน, checklist, เงื่อนไขการใช้รถ
+
+ทั้ง 3 ไฟล์รันซ้ำได้ ไม่สร้างข้อมูลซ้ำ
+
+#### ตรวจว่าสำเร็จ
+
+รันใน Neon SQL Editor
+
+```sql
+SELECT
+  (SELECT count(*) FROM users)                  AS ผู้ใช้,
+  (SELECT count(*) FROM vehicles)               AS รถ,
+  (SELECT count(*) FROM checklist_definitions)  AS checklist,
+  (SELECT count(*) FROM terms_versions)         AS เงื่อนไข;
+```
+
+ต้องได้ `13 / 2 / 10 / 1`
+
+เสร็จแล้วเปิด https://carapprove.vercel.app ใส่อีเมลตัวเอง → ตั้งรหัส 6 หลัก → ใช้งานได้เลย
 
 ---
 
