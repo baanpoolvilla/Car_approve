@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans Thai", "Sarabun", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 antialiased;
+  font-family: var(--font-sans);
+}
+
+/* Keep iOS from zooming when a form field is focused. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@utility card {
+  @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm;
+}
+
+@utility label {
+  @apply mb-1 block text-sm font-medium text-slate-700;
+}
+
+@utility input {
+  @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900
+         outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100
+         disabled:bg-slate-100 disabled:text-slate-500;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm
+         font-medium transition active:scale-[0.99] disabled:cursor-not-allowed
+         disabled:opacity-50;
+}
+
+@utility btn-primary {
+  @apply btn bg-blue-700 text-white hover:bg-blue-800;
+}
+
+@utility btn-secondary {
+  @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+}
+
+@utility btn-danger {
+  @apply btn bg-red-600 text-white hover:bg-red-700;
+}
+
+@utility btn-success {
+  @apply btn bg-emerald-600 text-white hover:bg-emerald-700;
+}
+
+@utility chip {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
