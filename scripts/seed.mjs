@@ -1,7 +1,6 @@
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import ws from "ws";
+import pg from "pg";
 
-neonConfig.webSocketConstructor = ws;
+const { Pool } = pg;
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is not set. Create .env.local from .env.example first.");

@@ -1,33 +1,41 @@
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-serverless";
-import ws from "ws";
+import pg from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";
 
-neonConfig.webSocketConstructor = ws;
-
+/**
+ * Neon over plain TCP (node-postgres), not the WebSocket serverless driver.
+ * Vercel Functions cannot open a WebSocket to Neon's proxy — it times out — but
+ * TCP works and supports interactive transactions, which this app needs for
+ * every state change. Point DATABASE_URL at Neon's *pooled* endpoint so
+ * PgBouncer does the connection pooling that serverless can't do itself.
+ */
 const connectionString = process.env.DATABASE_URL;
 
-if (!connectionString && process.env.NEXT_PHASE !== "phase-production-build") {
-  console.warn(
-    "[db] DATABASE_URL is not set — copy .env.example to .env.local and fill it in."
-  );
+if (!connectionString) {
+  console.warn("[db] DATABASE_URL is not set — copy .env.example to .env.local and fill it in.");
 }
 
 declare global {
   // eslint-disable-next-line no-var
-  var __carApprovePool: Pool | undefined;
+  var __carApprovePool: pg.Pool | undefined;
 }
 
-// The pool is lazy: nothing connects until the first query runs, so `next build`
-// works without database credentials.
-const pool =
-  global.__carApprovePool ??
-  new Pool({
+function createPool() {
+  const pool = new pg.Pool({
     connectionString: connectionString ?? "postgresql://invalid/invalid",
-    max: 5,
+    // Neon's pooler is the real pool; each function instance needs very few.
+    max: 3,
     idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 10_000,
+    allowExitOnIdle: true,
   });
+  // A dropped idle socket (frozen serverless container, Neon scale-to-zero)
+  // must not take the process down; the pool simply opens a new connection.
+  pool.on("error", (err) => console.error("[db] idle client error:", err.message));
+  return pool;
+}
 
+const pool = global.__carApprovePool ?? createPool();
 if (process.env.NODE_ENV !== "production") global.__carApprovePool = pool;
 
 export const db = drizzle(pool, { schema });

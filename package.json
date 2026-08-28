@@ -12,22 +12,19 @@
     "db:setup": "npm run db:migrate"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4",
     "@types/pg": "^8.23.1",
     "drizzle-orm": "^0.38.4",
     "next": "^15.5.24",
     "pg": "^8.23.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "server-only": "^0.0.1",
-    "ws": "^8.18.0"
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
-    "@types/ws": "^8.5.13",
     "drizzle-kit": "^0.30.2",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.7.3"

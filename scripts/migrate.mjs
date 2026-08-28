@@ -1,10 +1,9 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import ws from "ws";
+import pg from "pg";
 
-neonConfig.webSocketConstructor = ws;
+const { Pool } = pg;
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dir = join(root, "drizzle");
