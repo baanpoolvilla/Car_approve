@@ -9,64 +9,103 @@ Web App แบบ Mobile-first สำหรับขอใช้รถ อนุ
 
 ---
 
-## 1. เริ่มใช้งาน (Local)
+## 1. ตั้งค่า Neon (ทำครั้งเดียว)
+
+Vercel deploy ได้แล้ว แต่ยังต่อฐานข้อมูลไม่ได้จนกว่าจะทำ 3 ขั้นนี้
+
+### 1.1 คัดลอก connection string จาก Neon
+
+ที่ Neon Console → project `carapprove` → ปุ่ม **Connect** (มุมขวาบน)
+
+- Branch: `production`
+- Database: `neondb`
+- **เลือก "Pooled connection"** (สำคัญมาก — host จะมีคำว่า `-pooler`)
+
+จะได้หน้าตาแบบนี้
+
+```
+postgresql://neondb_owner:xxxxxxxx@ep-xxxx-xxxx-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+```
+
+### 1.2 ใส่ Environment Variables ที่ Vercel
+
+Vercel → project `carapprove` → **Settings → Environment Variables** เพิ่ม 2 ตัว
+แล้วติ๊กให้ครบทั้ง Production, Preview, Development
+
+| Key | Value |
+|---|---|
+| `DATABASE_URL` | connection string จากข้อ 1.1 |
+| `APP_URL` | `https://carapprove.vercel.app` |
+
+จากนั้นไปที่ **Deployments → ... → Redeploy** เพื่อให้ค่าใหม่มีผล
+
+### 1.3 สร้างตารางและข้อมูลตั้งต้น
+
+รันจากเครื่องตัวเอง (ครั้งเดียว) ที่โฟลเดอร์โปรเจกต์
 
 ```bash
 npm install
-cp .env.example .env.local     # แล้วแก้ค่า DATABASE_URL
-npm run db:setup               # สร้างตาราง + ใส่ข้อมูลตั้งต้น
-npm run dev                    # http://localhost:3000
+cp .env.example .env.local
 ```
 
-### สร้างฐานข้อมูล Neon
-
-1. สร้าง project ที่ https://console.neon.tech (เลือก region `ap-southeast-1` เพื่อความเร็ว)
-2. คัดลอก **Pooled connection string** (host ต้องมีคำว่า `-pooler`)
-3. วางใน `.env.local` เป็นค่า `DATABASE_URL`
-
-`npm run db:setup` จะรัน:
-- `drizzle/0000_init.sql` — สร้าง enum, ตาราง, index และ constraint กันจองซ้อน
-- `scripts/seed.mjs` — เพิ่มผู้ใช้ 13 คน, รถ 2 คัน, checklist 10 ข้อ และเงื่อนไขการใช้รถฉบับ 1.0
-
-สคริปต์ทั้งสองรันซ้ำได้ (idempotent)
-
----
-
-## 2. Deploy ขึ้น Vercel
-
-1. push โค้ดขึ้น GitHub แล้ว Import project ใน Vercel
-2. ตั้งค่า Environment Variables:
-
-| ตัวแปร | จำเป็น | คำอธิบาย |
-|---|---|---|
-| `DATABASE_URL` | ✅ | Neon **pooled** connection string |
-| `APP_URL` | ✅ | เช่น `https://car.yourcompany.com` ใช้ในลิงก์ของอีเมล |
-| `RESEND_API_KEY` | – | ถ้าไม่ตั้ง ระบบจะแสดงรหัส OTP บนหน้าจอแทนการส่งอีเมล |
-| `EMAIL_FROM` | – | เช่น `Car Approve <no-reply@baanpoolvilla.com>` |
-| `CRON_SECRET` | – | ป้องกัน `/api/cron` (Vercel ใส่ header ให้อัตโนมัติ) |
-
-3. Deploy แล้วรัน migration ครั้งแรกจากเครื่องตัวเอง โดยชี้ `DATABASE_URL` ไปที่ production:
+เปิดไฟล์ `.env.local` แล้ววาง connection string ลงในบรรทัด `DATABASE_URL` จากนั้น
 
 ```bash
 npm run db:setup
 ```
 
-### Cron
+ควรเห็นผลลัพธ์ประมาณนี้
 
-`vercel.json` ตั้ง `/api/cron` ไว้วันละครั้ง (เหมาะกับ Vercel Hobby)
-ถ้าใช้ Plan Pro ให้เปลี่ยนเป็น `*/15 * * * *` เพื่อให้เตือนใกล้ถึงเวลาใช้รถและเตือนคืนรถเกินเวลาได้แบบใกล้เคียงเรียลไทม์
+```
+- apply 0000_init.sql ... ok
+- apply 0001_pin_auth.sql ... ok
+Migrations complete.
+Seeded 13 users.
+Seeded 2 vehicles.
+Seeded 10 checklist items.
+Seed complete.
+```
 
-Cron ทำ 3 อย่าง: เตือนก่อนถึงเวลาใช้รถ, เตือนคืนรถเกินกำหนด, และเปลี่ยนคำขอที่อนุมัติแล้วแต่ไม่มารับรถเป็น `EXPIRED`
+เสร็จแล้วเปิด https://carapprove.vercel.app ได้เลย
+
+> **ทางเลือก** ถ้าไม่อยากรันจากเครื่อง: เปิด Neon Console → **SQL Editor**
+> วางเนื้อหาไฟล์ `drizzle/0000_init.sql` แล้ว Run ตามด้วย `drizzle/0001_pin_auth.sql`
+> แต่ข้อมูลตั้งต้น (ผู้ใช้ 13 คน, รถ 2 คัน, checklist) ยังต้องรัน `npm run db:seed` อยู่ดี
+
+---
+
+## 2. รันบนเครื่องตัวเอง (Local dev)
+
+```bash
+npm install
+cp .env.example .env.local     # ใส่ DATABASE_URL
+npm run db:setup               # สร้างตาราง + ข้อมูลตั้งต้น (รันซ้ำได้)
+npm run dev                    # http://localhost:3000
+```
 
 ---
 
 ## 3. การเข้าสู่ระบบ
 
-Login ด้วยอีเมล + รหัส OTP 6 หลัก (อายุ 10 นาที) เฉพาะอีเมลที่มีอยู่ในระบบเท่านั้น
-Session เก็บใน cookie `httpOnly` อายุ 14 วัน
+**ไม่ต้องรอรหัสจากอีเมล** ขั้นตอนคือ
 
-**ถ้ายังไม่ได้ตั้ง `RESEND_API_KEY`** ระบบจะแสดงรหัสบนหน้าจอ (โหมดทดสอบ) และเขียนลง server log
-พร้อมใช้งานจริงเมื่อไหร่ให้สมัคร Resend ยืนยันโดเมน `baanpoolvilla.com` แล้วใส่ key
+1. ใส่อีเมลบริษัท → กด **ยืนยัน**
+2. **ครั้งแรก**: ตั้งรหัส 6 หลักของตัวเอง (พิมพ์ 2 ครั้งให้ตรงกัน) แล้วเข้าระบบทันที
+3. **ครั้งต่อไป**: ใส่รหัส 6 หลักที่ตั้งไว้ แล้วเข้าระบบได้เลย
+
+Session อยู่ได้ 14 วัน เปลี่ยนรหัสเองได้ที่ **เมนู → เปลี่ยนรหัส 6 หลัก**
+
+**ข้อควรรู้ด้านความปลอดภัย**: การตั้งรหัสครั้งแรกไม่มีการยืนยันตัวตนทางอีเมล
+ใครที่รู้อีเมลพนักงานและเข้าหน้าเว็บก่อนจะตั้งรหัสของคนนั้นได้ จึงควรให้ทุกคน
+เข้าไปตั้งรหัสของตัวเองให้ครบตั้งแต่วันแรก ผู้ดูแลระบบดูได้ที่หน้า **ผู้ใช้และสิทธิ์**
+ว่าใครตั้งรหัสแล้วบ้าง
+
+มาตรการที่ใส่ไว้แล้ว:
+- รหัสเก็บแบบ scrypt hash พร้อม salt ต่อคน (ไม่เก็บเลขจริง)
+- กรอกผิด 5 ครั้ง ล็อกบัญชี 15 นาที
+- ห้ามตั้งรหัสง่ายเกินไป (เลขซ้ำ 6 ตัว หรือเรียงติดกัน เช่น `111111`, `123456`)
+- Admin กด **รีเซ็ตรหัส** ได้ที่หน้าผู้ใช้ ซึ่งจะเตะคนนั้นออกจากทุกอุปกรณ์ แล้วให้ตั้งรหัสใหม่
+- ทุกครั้งที่ตั้ง / เปลี่ยน / รีเซ็ตรหัส ถูกบันทึกใน Audit Log
 
 ### ผู้ใช้ตั้งต้น (จาก seed)
 
@@ -80,6 +119,21 @@ Session เก็บใน cookie `httpOnly` อายุ 14 วัน
 | ที่เหลืออีก 8 คน | พนักงาน |
 
 แก้สิทธิ์ทั้งหมดได้ที่ **เมนู → ผู้ใช้และสิทธิ์**
+
+### อีเมลแจ้งเตือน (ไม่บังคับ)
+
+การ login ไม่ใช้อีเมลแล้ว แต่ถ้าอยากให้ระบบส่ง**อีเมลแจ้งเตือน**เวลามีคำขอรออนุมัติ
+ให้สมัคร Resend ยืนยันโดเมน `baanpoolvilla.com` แล้วใส่ `RESEND_API_KEY` กับ
+`EMAIL_FROM` ที่ Vercel ถ้าไม่ใส่ ระบบยังทำงานครบ แค่แจ้งเตือนอยู่ในระบบอย่างเดียว
+
+### Cron
+
+`vercel.json` ตั้ง `/api/cron` ไว้วันละครั้ง (Vercel Hobby จำกัดไว้เท่านี้)
+ถ้าอัปเป็น Pro เปลี่ยนเป็น `*/15 * * * *` เพื่อให้เตือนใกล้ถึงเวลาใช้รถและเตือนคืนรถ
+เกินเวลาได้ใกล้เคียงเรียลไทม์
+
+Cron ทำ 3 อย่าง: เตือนก่อนถึงเวลาใช้รถ, เตือนคืนรถเกินกำหนด, และเปลี่ยนคำขอที่อนุมัติแล้ว
+แต่ไม่มารับรถเป็น `EXPIRED`
 
 ---
 
@@ -123,11 +177,11 @@ APPROVED ที่เลยเวลาโดยไม่รับรถ → EXP
 ## 6. โครงสร้างโปรเจกต์
 
 ```
-drizzle/0000_init.sql        SQL migration (แหล่งความจริงของ schema จริง)
+drizzle/*.sql                SQL migrations (แหล่งความจริงของ schema จริง)
 scripts/migrate.mjs          รัน migration ที่ยังไม่เคยรัน
 scripts/seed.mjs             ข้อมูลตั้งต้น
 src/db/schema.ts             Drizzle schema (ใช้ query)
-src/lib/auth.ts              OTP login, session, RBAC
+src/lib/auth.ts              PIN login, session, RBAC
 src/lib/workflow.ts          business logic ทั้งหมด (submit / approve / checkout / return / complete)
 src/lib/queries.ts           query ที่ใช้ซ้ำสำหรับหน้ารายการ
 src/lib/notify.ts            แจ้งเตือนในระบบ + อีเมล (ส่งหลัง transaction commit)

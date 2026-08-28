@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUserPage, isAdmin, isFleet, isAuditor } from "@/lib/auth";
 import LogoutButton from "@/components/LogoutButton";
+import ChangePinForm from "@/components/ChangePinForm";
 import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +82,7 @@ export default async function MorePage() {
         </div>
       )}
 
+      <ChangePinForm />
       <LogoutButton />
       <p className="pb-2 text-center text-xs text-slate-400">
         ระบบบันทึกการใช้รถบริษัท · เขตเวลา Asia/Bangkok

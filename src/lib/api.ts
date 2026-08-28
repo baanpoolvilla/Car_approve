@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { AuthError } from "./auth";
+import { AuthError, LoginError } from "./auth";
 import { RuleError } from "./workflow";
 
 export function ok<T>(data: T, init?: number) {
@@ -14,6 +14,7 @@ export function fail(message: string, status = 400) {
 export function handleError(err: unknown) {
   if (err instanceof AuthError) return fail(err.message, err.status);
   if (err instanceof RuleError) return fail(err.message, 400);
+  if (err instanceof LoginError) return fail(err.message, 400);
   if (err instanceof Error) {
     console.error("[api]", err);
     return fail(err.message || "เกิดข้อผิดพลาดในระบบ", 500);

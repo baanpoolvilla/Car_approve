@@ -105,6 +105,10 @@ export const users = pgTable(
     department: text("department"),
     phone: text("phone"),
     isActive: boolean("is_active").notNull().default(true),
+    pinHash: text("pin_hash"),
+    pinSetAt: ts("pin_set_at"),
+    failedAttempts: integer("failed_attempts").notNull().default(0),
+    lockedUntil: ts("locked_until"),
     createdAt: createdAt(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },
@@ -125,20 +129,6 @@ export const userRoles = pgTable(
 );
 
 /* -------------------------------------------------------------- sessions */
-
-export const loginCodes = pgTable(
-  "login_codes",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    email: text("email").notNull(),
-    codeHash: text("code_hash").notNull(),
-    expiresAt: ts("expires_at").notNull(),
-    consumedAt: ts("consumed_at"),
-    attempts: integer("attempts").notNull().default(0),
-    createdAt: createdAt(),
-  },
-  (t) => [index("login_codes_email_idx").on(t.email, t.createdAt)]
-);
 
 export const sessions = pgTable(
   "sessions",

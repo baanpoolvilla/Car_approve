@@ -10,6 +10,7 @@ type Row = {
   name: string;
   department: string | null;
   isActive: boolean;
+  hasPin: boolean;
   roles: RoleCode[];
 };
 
@@ -131,6 +132,29 @@ export default function UsersAdmin({ users }: { users: Row[] }) {
             >
               {u.isActive ? "ใช้งาน" : "ปิดใช้งาน"}
             </button>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-xs">
+            <span className={u.hasPin ? "text-emerald-700" : "text-slate-400"}>
+              {u.hasPin ? "🔒 ตั้งรหัสแล้ว" : "ยังไม่ได้ตั้งรหัส"}
+            </span>
+            {u.hasPin && (
+              <button
+                className="text-blue-700 underline"
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    confirm(
+                      `รีเซ็ตรหัสของ ${u.name}?
+${u.name} จะถูกออกจากระบบทุกอุปกรณ์ และตั้งรหัสใหม่เองได้ในการเข้าใช้งานครั้งถัดไป`
+                    )
+                  ) {
+                    send(`/api/admin/users/${u.id}/reset-pin`, "POST", {});
+                  }
+                }}
+              >
+                รีเซ็ตรหัส
+              </button>
+            )}
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {ASSIGNABLE.map((r) => {

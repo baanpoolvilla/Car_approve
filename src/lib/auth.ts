@@ -2,16 +2,16 @@ import "server-only";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { loginCodes, sessions, userRoles, users } from "@/db/schema";
+import { sessions, userRoles, users } from "@/db/schema";
 import type { RoleCode } from "@/db/schema";
 
 export const SESSION_COOKIE = "car_session";
 const SESSION_DAYS = 14;
-const CODE_TTL_MINUTES = 10;
-const MAX_CODE_ATTEMPTS = 5;
+const MAX_PIN_ATTEMPTS = 5;
+const LOCK_MINUTES = 15;
 
 export type SessionUser = {
   id: string;
@@ -25,85 +25,157 @@ function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+/* ------------------------------------------------------------- PIN hashing */
+
+/** scrypt with a per-user salt, stored as `salt:hash`. */
+function hashPin(pin: string) {
+  const salt = randomBytes(16).toString("hex");
+  const derived = scryptSync(pin, salt, 64).toString("hex");
+  return `${salt}:${derived}`;
+}
+
+function verifyPin(pin: string, stored: string) {
+  const [salt, expected] = stored.split(":");
+  if (!salt || !expected) return false;
+  const derived = scryptSync(pin, salt, 64);
+  const expectedBuf = Buffer.from(expected, "hex");
+  return derived.length === expectedBuf.length && timingSafeEqual(derived, expectedBuf);
+}
+
+/** Rejects PINs that are trivially guessable. */
+export function pinProblem(pin: string): string | null {
+  if (!/^\d{6}$/.test(pin)) return "รหัสต้องเป็นตัวเลข 6 หลัก";
+  if (/^(\d)\1{5}$/.test(pin)) return "รหัสซ้ำกันทั้ง 6 ตัวใช้ไม่ได้ กรุณาตั้งรหัสอื่น";
+  const digits = pin.split("").map(Number);
+  const ascending = digits.every((d, i) => i === 0 || d === (digits[i - 1] + 1) % 10);
+  const descending = digits.every((d, i) => i === 0 || d === (digits[i - 1] + 9) % 10);
+  if (ascending || descending) return "รหัสเรียงตัวเลขติดกันใช้ไม่ได้ กรุณาตั้งรหัสอื่น";
+  return null;
+}
+
 async function clientMeta() {
   const h = await headers();
   return {
     ip:
-      h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      h.get("x-real-ip") ??
-      null,
+      h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h.get("x-real-ip") ?? null,
     userAgent: h.get("user-agent") ?? null,
   };
 }
 
-/* ------------------------------------------------------------ login flow */
+/* ------------------------------------------------------------- login flow */
 
-export async function requestLoginCode(rawEmail: string) {
-  const email = rawEmail.trim().toLowerCase();
-  const user = await db.query.users.findFirst({ where: eq(users.email, email) });
-
-  // Always behave the same way so the endpoint cannot be used to enumerate staff.
-  if (!user || !user.isActive) return { ok: true as const, code: null };
-
-  const recent = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(loginCodes)
-    .where(
-      and(
-        eq(loginCodes.email, email),
-        gt(loginCodes.createdAt, new Date(Date.now() - 15 * 60_000))
-      )
-    );
-  if ((recent[0]?.n ?? 0) >= 5) {
-    throw new Error("ขอรหัสถี่เกินไป กรุณารอสักครู่แล้วลองใหม่");
-  }
-
-  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  await db.insert(loginCodes).values({
-    email,
-    codeHash: sha256(code),
-    expiresAt: new Date(Date.now() + CODE_TTL_MINUTES * 60_000),
-  });
-
-  return { ok: true as const, code, user };
+export class LoginError extends Error {
+  status = 400;
 }
 
-export async function verifyLoginCode(rawEmail: string, rawCode: string) {
+async function findActiveUser(rawEmail: string) {
   const email = rawEmail.trim().toLowerCase();
-  const code = rawCode.trim();
-
-  const record = await db.query.loginCodes.findFirst({
-    where: and(eq(loginCodes.email, email), isNull(loginCodes.consumedAt)),
-    orderBy: [desc(loginCodes.createdAt)],
-  });
-
-  if (!record) throw new Error("ไม่พบรหัสยืนยัน กรุณาขอรหัสใหม่");
-  if (record.expiresAt.getTime() < Date.now()) throw new Error("รหัสหมดอายุแล้ว กรุณาขอรหัสใหม่");
-  if (record.attempts >= MAX_CODE_ATTEMPTS) throw new Error("กรอกรหัสผิดหลายครั้ง กรุณาขอรหัสใหม่");
-
-  const a = Buffer.from(sha256(code));
-  const b = Buffer.from(record.codeHash);
-  const match = a.length === b.length && timingSafeEqual(a, b);
-
-  if (!match) {
-    await db
-      .update(loginCodes)
-      .set({ attempts: record.attempts + 1 })
-      .where(eq(loginCodes.id, record.id));
-    throw new Error("รหัสยืนยันไม่ถูกต้อง");
-  }
-
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
-  if (!user || !user.isActive) throw new Error("บัญชีนี้ถูกปิดการใช้งาน");
+  if (!user) throw new LoginError("ไม่พบอีเมลนี้ในระบบ กรุณาติดต่อผู้ดูแลระบบ");
+  if (!user.isActive) throw new LoginError("บัญชีนี้ถูกปิดการใช้งาน");
+  return user;
+}
+
+function assertNotLocked(lockedUntil: Date | null) {
+  if (lockedUntil && lockedUntil.getTime() > Date.now()) {
+    const mins = Math.ceil((lockedUntil.getTime() - Date.now()) / 60_000);
+    throw new LoginError(`กรอกรหัสผิดหลายครั้ง บัญชีถูกล็อกอีก ${mins} นาที`);
+  }
+}
+
+/** Step 1: does this person already have a PIN, or do they need to set one? */
+export async function checkEmail(rawEmail: string) {
+  const user = await findActiveUser(rawEmail);
+  assertNotLocked(user.lockedUntil);
+  return { name: user.name, hasPin: Boolean(user.pinHash) };
+}
+
+/** Step 2a: first-time setup — the person chooses their own PIN. */
+export async function setPin(rawEmail: string, pin: string, confirmPin: string) {
+  const user = await findActiveUser(rawEmail);
+  if (user.pinHash) throw new LoginError("บัญชีนี้ตั้งรหัสไว้แล้ว กรุณาเข้าสู่ระบบด้วยรหัสเดิม");
+  if (pin !== confirmPin) throw new LoginError("รหัสทั้งสองช่องไม่ตรงกัน");
+
+  const problem = pinProblem(pin);
+  if (problem) throw new LoginError(problem);
 
   await db
-    .update(loginCodes)
-    .set({ consumedAt: new Date() })
-    .where(eq(loginCodes.id, record.id));
+    .update(users)
+    .set({
+      pinHash: hashPin(pin),
+      pinSetAt: new Date(),
+      failedAttempts: 0,
+      lockedUntil: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, user.id));
 
   await createSession(user.id);
   return user;
 }
+
+/** Step 2b: normal login with the PIN the person set. */
+export async function loginWithPin(rawEmail: string, pin: string) {
+  const user = await findActiveUser(rawEmail);
+  assertNotLocked(user.lockedUntil);
+  if (!user.pinHash) throw new LoginError("ยังไม่ได้ตั้งรหัส กรุณาตั้งรหัสก่อนเข้าใช้งาน");
+
+  if (!verifyPin(pin, user.pinHash)) {
+    const attempts = user.failedAttempts + 1;
+    const lock = attempts >= MAX_PIN_ATTEMPTS;
+    await db
+      .update(users)
+      .set({
+        failedAttempts: lock ? 0 : attempts,
+        lockedUntil: lock ? new Date(Date.now() + LOCK_MINUTES * 60_000) : user.lockedUntil,
+      })
+      .where(eq(users.id, user.id));
+
+    throw new LoginError(
+      lock
+        ? `กรอกรหัสผิด ${MAX_PIN_ATTEMPTS} ครั้ง บัญชีถูกล็อก ${LOCK_MINUTES} นาที`
+        : `รหัสไม่ถูกต้อง (เหลืออีก ${MAX_PIN_ATTEMPTS - attempts} ครั้ง)`
+    );
+  }
+
+  if (user.failedAttempts !== 0 || user.lockedUntil) {
+    await db
+      .update(users)
+      .set({ failedAttempts: 0, lockedUntil: null })
+      .where(eq(users.id, user.id));
+  }
+
+  await createSession(user.id);
+  return user;
+}
+
+/** Change your own PIN from inside the app. */
+export async function changePin(userId: string, currentPin: string, newPin: string) {
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!user?.pinHash) throw new LoginError("ไม่พบข้อมูลผู้ใช้");
+  if (!verifyPin(currentPin, user.pinHash)) throw new LoginError("รหัสเดิมไม่ถูกต้อง");
+
+  const problem = pinProblem(newPin);
+  if (problem) throw new LoginError(problem);
+
+  await db
+    .update(users)
+    .set({ pinHash: hashPin(newPin), pinSetAt: new Date(), updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
+/** Admin action: clear a PIN so the person can set a new one. */
+export async function clearPin(userId: string) {
+  await db
+    .update(users)
+    .set({ pinHash: null, pinSetAt: null, failedAttempts: 0, lockedUntil: null, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+
+  // Signing them out everywhere stops a stolen session outliving the reset.
+  await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.userId, userId));
+}
+
+/* -------------------------------------------------------------- sessions */
 
 export async function createSession(userId: string) {
   const token = randomBytes(32).toString("base64url");

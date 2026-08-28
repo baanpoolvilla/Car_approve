@@ -21,6 +21,7 @@ export default async function AdminUsersPage() {
     name: u.name,
     department: u.department,
     isActive: u.isActive,
+    hasPin: Boolean(u.pinHash),
     roles: roles.filter((r) => r.userId === u.id).map((r) => r.role),
   }));
 

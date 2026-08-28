@@ -14,7 +14,7 @@ export default async function LoginPage() {
             🚗
           </div>
           <h1 className="text-lg font-bold text-slate-900">ระบบบันทึกการใช้รถบริษัท</h1>
-          <p className="mt-1 text-sm text-slate-500">เข้าสู่ระบบด้วยอีเมลบริษัท</p>
+          <p className="mt-1 text-sm text-slate-500">เข้าสู่ระบบด้วยอีเมลและรหัส 6 หลัก</p>
         </div>
         <LoginForm />
       </div>
