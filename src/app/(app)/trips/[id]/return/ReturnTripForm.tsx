@@ -3,21 +3,25 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import PhotoCapture, { type CapturedPhoto } from "@/components/PhotoCapture";
+import { powerWords } from "@/lib/labels";
 
 export default function ReturnTripForm({
   tripId,
   odometerOut,
-  fuelOut,
+  energyOut,
+  powerType,
   requiredAngles,
 }: {
   tripId: string;
   odometerOut: number;
-  fuelOut: number;
+  energyOut: number;
+  powerType: "EV" | "FUEL";
   requiredAngles: { code: string; label: string }[];
 }) {
   const router = useRouter();
   const [odometer, setOdometer] = useState(String(odometerOut));
-  const [fuelLevel, setFuelLevel] = useState(fuelOut);
+  const [energyLevel, setEnergyLevel] = useState(energyOut);
+  const words = powerWords(powerType);
   const [hasDamage, setHasDamage] = useState(false);
   const [damageNote, setDamageNote] = useState("");
   const [anglePhotos, setAnglePhotos] = useState<Record<string, CapturedPhoto[]>>({});
@@ -45,7 +49,7 @@ export default function ReturnTripForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           odometer: odoNumber,
-          fuelLevel,
+          energyLevel,
           hasDamage,
           damageNote,
           photoIds: [
@@ -69,7 +73,7 @@ export default function ReturnTripForm({
       {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
       <section className="card space-y-3">
-        <h2 className="text-sm font-semibold text-slate-700">1. เลขไมล์และน้ำมัน</h2>
+        <h2 className="text-sm font-semibold text-slate-700">1. เลขไมล์และ{words.short}</h2>
         <div>
           <label className="label" htmlFor="odo">
             เลขไมล์ตอนคืน (กม.) *
@@ -95,27 +99,27 @@ export default function ReturnTripForm({
           )}
         </div>
         <div>
-          <label className="label" htmlFor="fuel">
-            ระดับน้ำมัน: <span className="font-bold text-blue-700">{fuelLevel}%</span>
+          <label className="label" htmlFor="energy">
+            {words.level}: <span className="font-bold text-blue-700">{energyLevel}%</span>
           </label>
           <input
-            id="fuel"
+            id="energy"
             type="range"
             min={0}
             max={100}
             step={5}
             className="w-full accent-blue-700"
-            value={fuelLevel}
-            onChange={(e) => setFuelLevel(Number(e.target.value))}
+            value={energyLevel}
+            onChange={(e) => setEnergyLevel(Number(e.target.value))}
           />
           <div className="flex justify-between text-[10px] text-slate-400">
-            <span>E</span>
-            <span>1/2</span>
-            <span>F</span>
+            {words.marks.map((m) => (
+              <span key={m}>{m}</span>
+            ))}
           </div>
-          {fuelLevel < fuelOut && (
+          {energyLevel < energyOut && (
             <p className="mt-1 text-xs text-amber-700">
-              น้ำมันน้อยกว่าตอนรับรถ ({fuelOut}%) — ควรเติมก่อนคืน
+              {words.low} (ตอนรับรถ {energyOut}%)
             </p>
           )}
         </div>

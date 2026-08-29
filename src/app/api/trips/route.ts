@@ -16,7 +16,7 @@ type Payload = {
   note?: string;
   expectedReturnAt?: string;
   odometer: number;
-  fuelLevel: number;
+  energyLevel: number;
   photoIds?: string[];
 };
 
@@ -35,7 +35,7 @@ export const POST = route(async (req) => {
       note: p.note,
       expectedReturnAt: p.expectedReturnAt ? fromBangkokInput(p.expectedReturnAt) : null,
       odometer: Number(p.odometer),
-      fuelLevel: Number(p.fuelLevel),
+      energyLevel: Number(p.energyLevel),
       photoIds: p.photoIds ?? [],
     },
     await clientIp()

@@ -33,6 +33,7 @@ export default async function AdminVehiclesPage() {
           color: v.color,
           seats: v.seats,
           currentOdometer: v.currentOdometer,
+          powerType: v.powerType,
           status: v.status,
           note: v.note,
           isActive: v.isActive,

@@ -16,6 +16,7 @@ export const GET = route(async () => {
       plateNumber: r.vehicle.plateNumber,
       seats: r.vehicle.seats,
       currentOdometer: r.vehicle.currentOdometer,
+      powerType: r.vehicle.powerType,
       status: r.vehicle.status,
       available: r.available,
       usedBy: r.openTrip ? r.openTrip.driverName : null,

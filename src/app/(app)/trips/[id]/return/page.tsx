@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { trips, vehicles } from "@/db/schema";
 import { isFleet, requireUserPage } from "@/lib/auth";
 import { ANGLE_LABEL, getRequiredAngles } from "@/lib/settings";
+import { powerWords } from "@/lib/labels";
 import { fmtDateTime } from "@/lib/datetime";
 import { BackLink, PageHeader } from "@/components/ui";
 import ReturnTripForm from "./ReturnTripForm";
@@ -27,18 +28,20 @@ export default async function ReturnTripPage({ params }: { params: Promise<{ id:
   if (t.status !== "IN_USE") redirect(`/trips/${id}`);
 
   const requiredAngles = await getRequiredAngles();
+  const words = powerWords(v.powerType);
 
   return (
     <div>
       <BackLink href={`/trips/${id}`} label="รายละเอียด" />
       <PageHeader title="คืนรถ" subtitle={`${t.tripNo} · ${v.brand} ${v.model ?? ""} ${v.plateNumber}`} />
       <p className="mb-3 text-xs text-slate-500">
-        เอารถออกเมื่อ {fmtDateTime(t.checkedOutAt)} · เลขไมล์ {t.odometerOut.toLocaleString("th-TH")} กม. · น้ำมัน {t.fuelOut}%
+        เอารถออกเมื่อ {fmtDateTime(t.checkedOutAt)} · เลขไมล์ {t.odometerOut.toLocaleString("th-TH")} กม. · {words.short} {t.energyOut}%
       </p>
       <ReturnTripForm
         tripId={id}
         odometerOut={t.odometerOut}
-        fuelOut={t.fuelOut}
+        energyOut={t.energyOut}
+        powerType={v.powerType}
         requiredAngles={requiredAngles.map((a) => ({ code: a, label: ANGLE_LABEL[a] ?? a }))}
       />
     </div>

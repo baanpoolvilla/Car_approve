@@ -13,6 +13,7 @@ import type { PhotoAngle } from "@/db/schema";
 import { logAudit } from "./audit";
 import { queueNotification } from "./notify";
 import { getRequiredAngles } from "./settings";
+import { powerWords } from "./labels";
 import type { SessionUser } from "./auth";
 import { supervisorRecipients } from "./recipients";
 
@@ -147,7 +148,7 @@ export type StartTripInput = {
   note?: string | null;
   expectedReturnAt?: Date | null;
   odometer: number;
-  fuelLevel: number;
+  energyLevel: number;
   photoIds: string[];
 };
 
@@ -156,7 +157,7 @@ export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: 
   if (!input.purpose?.trim()) rule("กรุณาระบุวัตถุประสงค์");
   if (!input.destination?.trim()) rule("กรุณาระบุจุดหมาย");
   if (!Number.isInteger(input.odometer) || input.odometer < 0) rule("เลขไมล์ไม่ถูกต้อง");
-  if (input.fuelLevel < 0 || input.fuelLevel > 100) rule("ระดับน้ำมันต้องอยู่ระหว่าง 0–100");
+  if (input.energyLevel < 0 || input.energyLevel > 100) rule("ระดับพลังงานต้องอยู่ระหว่าง 0–100");
   if (input.passengerCount < 1) rule("จำนวนผู้โดยสารต้องอย่างน้อย 1 คน");
 
   const vehicle = await db.query.vehicles.findFirst({ where: eq(vehicles.id, input.vehicleId) });
@@ -185,6 +186,8 @@ export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: 
     );
   }
 
+  const words = powerWords(vehicle!.powerType);
+
   const found = await loosePhotosOf(actor.id, input.photoIds);
   await assertAngles(found, false);
   const attachIds = found.map((p) => p.id);
@@ -210,7 +213,7 @@ export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: 
           status: "IN_USE",
           checkedOutAt: now,
           odometerOut: input.odometer,
-          fuelOut: input.fuelLevel,
+          energyOut: input.energyLevel,
         })
         .returning({ id: trips.id, tripNo: trips.tripNo });
 
@@ -235,7 +238,7 @@ export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: 
           destination: input.destination,
           purpose: input.purpose,
           odometer: input.odometer,
-          fuelLevel: input.fuelLevel,
+          energyLevel: input.energyLevel,
         },
         ip,
       });
@@ -244,7 +247,7 @@ export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: 
         userIds: await supervisorRecipients(tx, actor.id),
         type: "TRIP_STARTED",
         title: `${actor.name} เอารถออก — ${vehicle!.brand} ${vehicle!.model ?? ""}`,
-        body: `${tripNo}\nจุดหมาย: ${input.destination}\nวัตถุประสงค์: ${input.purpose}\nเลขไมล์ ${km(input.odometer)} กม. · น้ำมัน ${input.fuelLevel}%`,
+        body: `${tripNo}\nจุดหมาย: ${input.destination}\nวัตถุประสงค์: ${input.purpose}\nเลขไมล์ ${km(input.odometer)} กม. · ${words.short} ${input.energyLevel}%`,
         link: `/trips/${row.id}`,
       });
 
@@ -265,7 +268,7 @@ export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: 
 
 export type EndTripInput = {
   odometer: number;
-  fuelLevel: number;
+  energyLevel: number;
   hasDamage: boolean;
   damageNote?: string | null;
   photoIds: string[];
@@ -288,7 +291,7 @@ export async function endTrip(
   if (!canReturn) rule("คุณไม่มีสิทธิ์คืนรถของรายการนี้");
 
   if (!Number.isInteger(input.odometer) || input.odometer < 0) rule("เลขไมล์ไม่ถูกต้อง");
-  if (input.fuelLevel < 0 || input.fuelLevel > 100) rule("ระดับน้ำมันต้องอยู่ระหว่าง 0–100");
+  if (input.energyLevel < 0 || input.energyLevel > 100) rule("ระดับพลังงานต้องอยู่ระหว่าง 0–100");
   if (input.odometer < trip!.odometerOut) {
     rule(
       `เลขไมล์ตอนคืน (${km(input.odometer)}) ต้องไม่น้อยกว่าตอนเอารถออก (${km(trip!.odometerOut)})`
@@ -318,7 +321,7 @@ export async function endTrip(
         status: "COMPLETED",
         returnedAt: now,
         odometerIn: input.odometer,
-        fuelIn: input.fuelLevel,
+        energyIn: input.energyLevel,
         hasDamage: input.hasDamage,
         damageNote: input.damageNote?.trim() || null,
         updatedAt: now,
@@ -339,7 +342,7 @@ export async function endTrip(
       after: {
         status: "COMPLETED",
         odometer: input.odometer,
-        fuelLevel: input.fuelLevel,
+        energyLevel: input.energyLevel,
         distance,
         hasDamage: input.hasDamage,
       },
@@ -347,9 +350,10 @@ export async function endTrip(
     });
 
     const [vehicle] = await tx
-      .select({ brand: vehicles.brand, model: vehicles.model })
+      .select({ brand: vehicles.brand, model: vehicles.model, powerType: vehicles.powerType })
       .from(vehicles)
       .where(eq(vehicles.id, trip!.vehicleId));
+    const words = powerWords(vehicle?.powerType ?? "EV");
 
     deliver = await queueNotification(tx, {
       userIds: await supervisorRecipients(tx, actor.id),
@@ -357,7 +361,7 @@ export async function endTrip(
       title: input.hasDamage
         ? `⚠️ ${actor.name} คืนรถพร้อมแจ้งความเสียหาย`
         : `${actor.name} คืนรถแล้ว — ${vehicle?.brand ?? ""} ${vehicle?.model ?? ""}`,
-      body: `${trip!.tripNo}\nระยะทาง ${km(distance)} กม. · น้ำมันเหลือ ${input.fuelLevel}%${
+      body: `${trip!.tripNo}\nระยะทาง ${km(distance)} กม. · ${words.short}เหลือ ${input.energyLevel}%${
         input.hasDamage ? `\nความเสียหาย: ${input.damageNote}` : ""
       }`,
       link: `/trips/${tripId}`,

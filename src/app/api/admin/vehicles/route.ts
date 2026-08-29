@@ -16,6 +16,7 @@ type Payload = {
   color?: string;
   seats?: number;
   currentOdometer?: number;
+  powerType?: "EV" | "FUEL";
   note?: string;
 };
 
@@ -42,6 +43,7 @@ export const POST = route(async (req) => {
       color: p.color?.trim() || null,
       seats: p.seats ?? null,
       currentOdometer: p.currentOdometer ?? 0,
+      powerType: p.powerType === "FUEL" ? "FUEL" : "EV",
       note: p.note?.trim() || null,
     })
     .returning({ id: vehicles.id });

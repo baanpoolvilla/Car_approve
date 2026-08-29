@@ -6,6 +6,7 @@ import { auditEvents, incidents, photos, trips, users, vehicles } from "@/db/sch
 import { isFleet, requireUserPage } from "@/lib/auth";
 import { fmtDateTime, durationText } from "@/lib/datetime";
 import { ANGLE_LABEL } from "@/lib/settings";
+import { POWER_TYPE_LABEL, powerWords } from "@/lib/labels";
 import { BackLink, Field, StatusBadge } from "@/components/ui";
 import TripActions from "./TripActions";
 
@@ -69,6 +70,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const inPhotos = photoRows.filter((p) => p.phase === "AFTER" && !p.incidentId);
   const distance = t.odometerIn !== null ? t.odometerIn - t.odometerOut : null;
   const isDriver = t.driverId === user.id;
+  const words = powerWords(v.powerType);
 
   return (
     <div className="space-y-4">
@@ -81,7 +83,9 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
             <h1 className="text-lg font-bold text-slate-900">
               {v.brand} {v.model ?? ""}
             </h1>
-            <p className="text-xs text-slate-500">{v.plateNumber}</p>
+            <p className="text-xs text-slate-500">
+              {v.plateNumber} · {POWER_TYPE_LABEL[v.powerType]}
+            </p>
           </div>
           <StatusBadge status={t.status} />
         </div>
@@ -107,7 +111,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
         <h2 className="mb-2 text-sm font-semibold text-slate-700">🚗 ตอนเอารถออก</h2>
         <Field label="เวลา" value={fmtDateTime(t.checkedOutAt)} />
         <Field label="เลขไมล์" value={`${t.odometerOut.toLocaleString("th-TH")} กม.`} />
-        <Field label="ระดับน้ำมัน" value={`${t.fuelOut}%`} />
+        <Field label={words.level} value={`${t.energyOut}%`} />
         {t.expectedReturnAt && (
           <Field label="แจ้งว่าจะคืน" value={fmtDateTime(t.expectedReturnAt)} />
         )}
@@ -124,7 +128,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
             label="ระยะทาง"
             value={distance !== null ? `${distance.toLocaleString("th-TH")} กม.` : "-"}
           />
-          <Field label="ระดับน้ำมัน" value={`${t.fuelIn}%`} />
+          <Field label={words.level} value={`${t.energyIn}%`} />
           <Field
             label="สภาพรถ"
             value={

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 type Payload = {
   odometer: number;
-  fuelLevel: number;
+  energyLevel: number;
   hasDamage?: boolean;
   damageNote?: string;
   photoIds?: string[];
@@ -25,7 +25,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       id,
       {
         odometer: Number(p.odometer),
-        fuelLevel: Number(p.fuelLevel),
+        energyLevel: Number(p.energyLevel),
         hasDamage: Boolean(p.hasDamage),
         damageNote: p.damageNote,
         photoIds: p.photoIds ?? [],

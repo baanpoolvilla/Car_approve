@@ -27,6 +27,7 @@ export default async function NewTripPage() {
           plateNumber: f.vehicle.plateNumber,
           seats: f.vehicle.seats,
           currentOdometer: f.vehicle.currentOdometer,
+          powerType: f.vehicle.powerType,
           available: f.available,
           usedBy: f.openTrip?.driverName ?? null,
           blockReason: f.block?.reason ?? null,

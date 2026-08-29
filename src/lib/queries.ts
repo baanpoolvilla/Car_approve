@@ -16,8 +16,8 @@ export const tripListSelect = {
   expectedReturnAt: trips.expectedReturnAt,
   odometerOut: trips.odometerOut,
   odometerIn: trips.odometerIn,
-  fuelOut: trips.fuelOut,
-  fuelIn: trips.fuelIn,
+  energyOut: trips.energyOut,
+  energyIn: trips.energyIn,
   hasDamage: trips.hasDamage,
   driverId: trips.driverId,
   driverName: users.name,
@@ -26,6 +26,7 @@ export const tripListSelect = {
   vehicleBrand: vehicles.brand,
   vehicleModel: vehicles.model,
   vehiclePlate: vehicles.plateNumber,
+  vehiclePowerType: vehicles.powerType,
 };
 
 export type TripFilter = {

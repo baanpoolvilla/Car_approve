@@ -12,6 +12,7 @@ type Vehicle = {
   color: string | null;
   seats: number | null;
   currentOdometer: number;
+  powerType: "EV" | "FUEL";
   status: string;
   note: string | null;
   isActive: boolean;
@@ -101,6 +102,7 @@ export default function VehiclesAdmin({
       color: String(fd.get("color") ?? "").trim(),
       seats: num("seats"),
       currentOdometer: num("currentOdometer") ?? 0,
+      powerType: String(fd.get("powerType") ?? "EV"),
       note: String(fd.get("note") ?? "").trim(),
     };
   }
@@ -122,6 +124,10 @@ export default function VehiclesAdmin({
         placeholder="เลขไมล์ปัจจุบัน"
         defaultValue={v?.currentOdometer ?? 0}
       />
+      <select name="powerType" className="input" defaultValue={v?.powerType ?? "EV"}>
+        <option value="EV">รถไฟฟ้า (บันทึก % แบตเตอรี่)</option>
+        <option value="FUEL">รถน้ำมัน (บันทึก % ถังน้ำมัน)</option>
+      </select>
       <input name="note" className="input" placeholder="หมายเหตุ" defaultValue={v?.note ?? ""} />
     </>
   );
@@ -164,7 +170,8 @@ export default function VehiclesAdmin({
                   {v.brand} {v.model ?? ""}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {v.plateNumber} · {v.currentOdometer.toLocaleString("th-TH")} กม.
+                  {v.plateNumber} · {v.powerType === "EV" ? "ไฟฟ้า" : "น้ำมัน"} ·{" "}
+                  {v.currentOdometer.toLocaleString("th-TH")} กม.
                   {v.seats ? ` · ${v.seats} ที่นั่ง` : ""}
                 </p>
                 {v.note && <p className="mt-0.5 text-xs text-slate-400">{v.note}</p>}

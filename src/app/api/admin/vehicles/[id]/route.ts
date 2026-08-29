@@ -16,6 +16,7 @@ type Payload = {
   color?: string | null;
   seats?: number | null;
   currentOdometer?: number;
+  powerType?: "EV" | "FUEL";
   status?: "AVAILABLE" | "IN_USE" | "MAINTENANCE" | "INACTIVE";
   note?: string | null;
   isActive?: boolean;
@@ -51,6 +52,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         color: p.color === undefined ? target.color : p.color?.trim() || null,
         seats: p.seats === undefined ? target.seats : p.seats,
         currentOdometer: p.currentOdometer ?? target.currentOdometer,
+        powerType: p.powerType ?? target.powerType,
         status: p.status ?? target.status,
         note: p.note === undefined ? target.note : p.note?.trim() || null,
         isActive: p.isActive ?? target.isActive,

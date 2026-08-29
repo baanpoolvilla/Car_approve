@@ -37,6 +37,7 @@ const VEHICLES = [
     model: "S07",
     color: "-",
     seats: 5,
+    powerType: "EV",
     note: "แก้ไขเลขทะเบียนจริงได้ที่หน้า Admin > รถ",
   },
   {
@@ -45,6 +46,7 @@ const VEHICLES = [
     model: "-",
     color: "-",
     seats: 5,
+    powerType: "EV",
     note: "แก้ไขเลขทะเบียนจริงได้ที่หน้า Admin > รถ",
   },
 ];
@@ -94,10 +96,10 @@ try {
 
   for (const v of VEHICLES) {
     await pool.query(
-      `INSERT INTO vehicles (plate_number, brand, model, color, seats, note)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO vehicles (plate_number, brand, model, color, seats, power_type, note)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (plate_number) DO NOTHING`,
-      [v.plate, v.brand, v.model, v.color, v.seats, v.note]
+      [v.plate, v.brand, v.model, v.color, v.seats, v.powerType, v.note]
     );
   }
   console.log(`Seeded ${VEHICLES.length} vehicles.`);

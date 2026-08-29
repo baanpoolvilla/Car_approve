@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { logAuditStandalone } from "@/lib/audit";
 import { fmtDateTime } from "@/lib/datetime";
 import { handleError } from "@/lib/api";
-import { STATUS_LABEL_MAP } from "@/lib/labels";
+import { POWER_TYPE_LABEL, STATUS_LABEL_MAP } from "@/lib/labels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +44,7 @@ export async function GET(req: Request) {
       "อีเมล",
       "รถ",
       "ทะเบียน",
+      "ชนิดพลังงาน",
       "เอารถออกเมื่อ",
       "คืนรถเมื่อ",
       "วัตถุประสงค์",
@@ -52,8 +53,8 @@ export async function GET(req: Request) {
       "เลขไมล์ออก",
       "เลขไมล์คืน",
       "ระยะทาง (กม.)",
-      "น้ำมันออก (%)",
-      "น้ำมันคืน (%)",
+      "พลังงานออก (%)",
+      "พลังงานคืน (%)",
       "ความเสียหาย",
       "รายละเอียดความเสียหาย",
       "หมายเหตุ",
@@ -70,6 +71,7 @@ export async function GET(req: Request) {
           u.email,
           `${v.brand} ${v.model ?? ""}`.trim(),
           v.plateNumber,
+          POWER_TYPE_LABEL[v.powerType] ?? v.powerType,
           fmtDateTime(t.checkedOutAt),
           t.returnedAt ? fmtDateTime(t.returnedAt) : "",
           t.purpose,
@@ -78,8 +80,8 @@ export async function GET(req: Request) {
           t.odometerOut,
           t.odometerIn ?? "",
           distance,
-          t.fuelOut,
-          t.fuelIn ?? "",
+          t.energyOut,
+          t.energyIn ?? "",
           t.hasDamage ? "มี" : "",
           t.damageNote ?? "",
           t.note ?? "",

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import PhotoCapture, { type CapturedPhoto } from "@/components/PhotoCapture";
+import { POWER_TYPE_LABEL, powerWords } from "@/lib/labels";
 
 type VehicleOption = {
   id: string;
@@ -11,6 +12,7 @@ type VehicleOption = {
   plateNumber: string;
   seats: number | null;
   currentOdometer: number;
+  powerType: "EV" | "FUEL";
   available: boolean;
   usedBy: string | null;
   blockReason: string | null;
@@ -28,7 +30,7 @@ export default function StartTripForm({
 
   const [vehicleId, setVehicleId] = useState(free.length === 1 ? free[0].id : "");
   const [odometer, setOdometer] = useState("");
-  const [fuelLevel, setFuelLevel] = useState(50);
+  const [energyLevel, setEnergyLevel] = useState(80);
   const [purpose, setPurpose] = useState("");
   const [destination, setDestination] = useState("");
   const [passengerCount, setPassengerCount] = useState(1);
@@ -40,6 +42,7 @@ export default function StartTripForm({
   const [error, setError] = useState<string | null>(null);
 
   const chosen = vehicles.find((v) => v.id === vehicleId) ?? null;
+  const words = powerWords(chosen?.powerType ?? "EV");
   const missingAngles = requiredAngles.filter((a) => (anglePhotos[a.code]?.length ?? 0) === 0);
   const odoNumber = Number(odometer);
   const odoInvalid =
@@ -69,7 +72,7 @@ export default function StartTripForm({
           note,
           expectedReturnAt: expectedReturnAt || undefined,
           odometer: odoNumber,
-          fuelLevel,
+          energyLevel,
           photoIds: Object.values(anglePhotos).flat().map((p) => p.id),
         }),
       });
@@ -128,7 +131,7 @@ export default function StartTripForm({
                 {v.brand} {v.model ?? ""}
               </p>
               <p className="text-xs text-slate-500">
-                {v.plateNumber}
+                {v.plateNumber} · {POWER_TYPE_LABEL[v.powerType]}
                 {v.seats ? ` · ${v.seats} ที่นั่ง` : ""} · {v.currentOdometer.toLocaleString("th-TH")} กม.
               </p>
               {!v.available && (
@@ -144,7 +147,7 @@ export default function StartTripForm({
       {vehicleId && (
         <>
           <section className="card space-y-3">
-            <h2 className="text-sm font-semibold text-slate-700">2. เลขไมล์และน้ำมัน</h2>
+            <h2 className="text-sm font-semibold text-slate-700">2. เลขไมล์และ{words.short}</h2>
             <div>
               <label className="label" htmlFor="odo">
                 เลขไมล์ตอนนี้ (กม.) *
@@ -167,23 +170,23 @@ export default function StartTripForm({
               )}
             </div>
             <div>
-              <label className="label" htmlFor="fuel">
-                ระดับน้ำมัน: <span className="font-bold text-blue-700">{fuelLevel}%</span>
+              <label className="label" htmlFor="energy">
+                {words.level}: <span className="font-bold text-blue-700">{energyLevel}%</span>
               </label>
               <input
-                id="fuel"
+                id="energy"
                 type="range"
                 min={0}
                 max={100}
                 step={5}
                 className="w-full accent-blue-700"
-                value={fuelLevel}
-                onChange={(e) => setFuelLevel(Number(e.target.value))}
+                value={energyLevel}
+                onChange={(e) => setEnergyLevel(Number(e.target.value))}
               />
               <div className="flex justify-between text-[10px] text-slate-400">
-                <span>E</span>
-                <span>1/2</span>
-                <span>F</span>
+                {words.marks.map((m) => (
+                  <span key={m}>{m}</span>
+                ))}
               </div>
             </div>
           </section>

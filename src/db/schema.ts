@@ -37,6 +37,9 @@ export const vehicleStatusEnum = pgEnum("vehicle_status", [
 
 export const tripStatusEnum = pgEnum("trip_status", ["IN_USE", "COMPLETED", "CANCELLED"]);
 
+/** EV = รถไฟฟ้า (บันทึก % แบตเตอรี่), FUEL = รถน้ำมัน (บันทึก % ถังน้ำมัน) */
+export const powerTypeEnum = pgEnum("power_type", ["EV", "FUEL"]);
+
 /** BEFORE = ตอนเอารถออก, AFTER = ตอนคืนรถ */
 export const photoPhaseEnum = pgEnum("inspection_phase", ["BEFORE", "AFTER"]);
 
@@ -142,6 +145,7 @@ export const vehicles = pgTable(
     color: text("color"),
     seats: integer("seats"),
     currentOdometer: integer("current_odometer").notNull().default(0),
+    powerType: powerTypeEnum("power_type").notNull().default("EV"),
     status: vehicleStatusEnum("status").notNull().default("AVAILABLE"),
     note: text("note"),
     isActive: boolean("is_active").notNull().default(true),
@@ -192,11 +196,11 @@ export const trips = pgTable(
 
     checkedOutAt: ts("checked_out_at").notNull().defaultNow(),
     odometerOut: integer("odometer_out").notNull(),
-    fuelOut: integer("fuel_out").notNull(),
+    energyOut: integer("energy_out").notNull(),
 
     returnedAt: ts("returned_at"),
     odometerIn: integer("odometer_in"),
-    fuelIn: integer("fuel_in"),
+    energyIn: integer("energy_in"),
 
     hasDamage: boolean("has_damage").notNull().default(false),
     damageNote: text("damage_note"),
@@ -353,3 +357,4 @@ export type Trip = typeof trips.$inferSelect;
 export type RoleCode = (typeof roleEnum.enumValues)[number];
 export type TripStatus = (typeof tripStatusEnum.enumValues)[number];
 export type PhotoAngle = (typeof photoAngleEnum.enumValues)[number];
+export type PowerType = (typeof powerTypeEnum.enumValues)[number];
