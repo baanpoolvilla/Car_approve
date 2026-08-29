@@ -1,7 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { settings } from "@/db/schema";
+import { settings, termsVersions } from "@/db/schema";
 import type { PhotoAngle } from "@/db/schema";
 
 export const DEFAULT_REQUIRED_ANGLES: PhotoAngle[] = [
@@ -41,4 +41,11 @@ export async function setSetting(key: string, value: unknown) {
       target: settings.key,
       set: { value: value as never, updatedAt: new Date() },
     });
+}
+
+/** ข้อตกลงการใช้รถฉบับที่บังคับใช้อยู่ ต้องติ๊กยอมรับทุกครั้งก่อนเอารถออก */
+export async function getActiveTerms() {
+  return db.query.termsVersions.findFirst({
+    where: eq(termsVersions.isActive, true),
+  });
 }

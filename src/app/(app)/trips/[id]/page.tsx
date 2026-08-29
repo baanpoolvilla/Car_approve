@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { auditEvents, incidents, photos, trips, users, vehicles } from "@/db/schema";
+import { auditEvents, incidents, photos, termsVersions, trips, users, vehicles } from "@/db/schema";
 import { isFleet, requireUserPage } from "@/lib/auth";
 import { fmtDateTime, durationText } from "@/lib/datetime";
 import { ANGLE_LABEL } from "@/lib/settings";
@@ -46,14 +46,15 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
 
   const rows = await db
-    .select({ t: trips, v: vehicles, u: users })
+    .select({ t: trips, v: vehicles, u: users, termsVersion: termsVersions.version })
     .from(trips)
     .innerJoin(users, eq(users.id, trips.driverId))
     .innerJoin(vehicles, eq(vehicles.id, trips.vehicleId))
+    .leftJoin(termsVersions, eq(termsVersions.id, trips.termsVersionId))
     .where(eq(trips.id, id))
     .limit(1);
   if (rows.length === 0) notFound();
-  const { t, v, u } = rows[0];
+  const { t, v, u, termsVersion } = rows[0];
 
   const [photoRows, incidentRows, trail] = await Promise.all([
     db.select().from(photos).where(eq(photos.tripId, id)).orderBy(asc(photos.createdAt)),
@@ -114,6 +115,16 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
         <Field label={words.level} value={`${t.energyOut}%`} />
         {t.expectedReturnAt && (
           <Field label="แจ้งว่าจะคืน" value={fmtDateTime(t.expectedReturnAt)} />
+        )}
+        {t.termsAcceptedAt && (
+          <Field
+            label="ยอมรับข้อตกลง"
+            value={
+              <span className="text-emerald-700">
+                ✓ ฉบับ {termsVersion ?? "-"} · {fmtDateTime(t.termsAcceptedAt)}
+              </span>
+            }
+          />
         )}
         <PhotoGrid items={outPhotos} />
       </section>

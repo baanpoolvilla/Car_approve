@@ -21,9 +21,13 @@ type VehicleOption = {
 export default function StartTripForm({
   vehicles,
   requiredAngles,
+  termsVersion,
+  termsContent,
 }: {
   vehicles: VehicleOption[];
   requiredAngles: { code: string; label: string }[];
+  termsVersion: string | null;
+  termsContent: string | null;
 }) {
   const router = useRouter();
   const free = vehicles.filter((v) => v.available);
@@ -38,6 +42,8 @@ export default function StartTripForm({
   const [expectedReturnAt, setExpectedReturnAt] = useState("");
   const [note, setNote] = useState("");
   const [anglePhotos, setAnglePhotos] = useState<Record<string, CapturedPhoto[]>>({});
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +59,8 @@ export default function StartTripForm({
     !odoInvalid &&
     purpose.trim().length > 0 &&
     destination.trim().length > 0 &&
-    missingAngles.length === 0;
+    missingAngles.length === 0 &&
+    acceptTerms;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,6 +81,7 @@ export default function StartTripForm({
           odometer: odoNumber,
           energyLevel,
           photoIds: Object.values(anglePhotos).flat().map((p) => p.id),
+          acceptTerms,
         }),
       });
       const data = await res.json();
@@ -295,6 +303,45 @@ export default function StartTripForm({
             ))}
           </section>
 
+          <section className="card space-y-3 border-amber-300 bg-amber-50/40">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-800">
+                5. ข้อตกลงการใช้รถ
+                {termsVersion ? ` (ฉบับ ${termsVersion})` : ""}
+              </h2>
+              <button
+                type="button"
+                className="text-xs text-blue-700 underline"
+                onClick={() => setShowTerms((v) => !v)}
+              >
+                {showTerms ? "ย่อ" : "อ่านทั้งหมด"}
+              </button>
+            </div>
+
+            {termsContent && (
+              <div
+                className={`overflow-y-auto whitespace-pre-line rounded-lg border border-slate-200 bg-white p-3 text-xs leading-6 text-slate-700 ${
+                  showTerms ? "max-h-[60vh]" : "max-h-40"
+                }`}
+              >
+                {termsContent}
+              </div>
+            )}
+
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-white p-3">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-5 w-5 shrink-0 accent-blue-700"
+                checked={acceptTerms}
+                onChange={(e) => setAcceptTerms(e.target.checked)}
+              />
+              <span className="text-sm leading-6 text-slate-800">
+                ข้าพเจ้าได้ตรวจสอบสภาพรถตามรายการข้างต้นแล้ว ขอรับรองว่าข้อมูลเป็นความจริง
+                และยอมรับข้อตกลงการใช้รถ{termsVersion ? ` ฉบับ ${termsVersion}` : ""} ทุกข้อ
+              </span>
+            </label>
+          </section>
+
           {!ready && (
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
               {missingAngles.length > 0 && (
@@ -303,6 +350,7 @@ export default function StartTripForm({
               {odoInvalid && <p>ตรวจสอบเลขไมล์อีกครั้ง</p>}
               {!destination.trim() && <p>ยังไม่ได้ระบุจุดหมาย</p>}
               {!purpose.trim() && <p>ยังไม่ได้ระบุวัตถุประสงค์</p>}
+              {!acceptTerms && <p>ต้องติ๊กยอมรับข้อตกลงการใช้รถก่อน</p>}
             </div>
           )}
 

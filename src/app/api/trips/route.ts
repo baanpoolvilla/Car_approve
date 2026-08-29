@@ -18,6 +18,7 @@ type Payload = {
   odometer: number;
   energyLevel: number;
   photoIds?: string[];
+  acceptTerms?: boolean;
 };
 
 export const POST = route(async (req) => {
@@ -37,6 +38,7 @@ export const POST = route(async (req) => {
       odometer: Number(p.odometer),
       energyLevel: Number(p.energyLevel),
       photoIds: p.photoIds ?? [],
+      acceptTerms: Boolean(p.acceptTerms),
     },
     await clientIp()
   );

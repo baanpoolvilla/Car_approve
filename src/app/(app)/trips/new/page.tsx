@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUserPage } from "@/lib/auth";
 import { findOpenTrip, listVehicleStatus } from "@/lib/trips";
-import { ANGLE_LABEL, getRequiredAngles } from "@/lib/settings";
+import { ANGLE_LABEL, getActiveTerms, getRequiredAngles } from "@/lib/settings";
 import { BackLink, PageHeader } from "@/components/ui";
 import StartTripForm from "./StartTripForm";
 
@@ -13,7 +13,11 @@ export default async function NewTripPage() {
   const open = await findOpenTrip(user.id);
   if (open) redirect(`/trips/${open.id}/return`);
 
-  const [fleet, requiredAngles] = await Promise.all([listVehicleStatus(), getRequiredAngles()]);
+  const [fleet, requiredAngles, terms] = await Promise.all([
+    listVehicleStatus(),
+    getRequiredAngles(),
+    getActiveTerms(),
+  ]);
 
   return (
     <div>
@@ -33,6 +37,8 @@ export default async function NewTripPage() {
           blockReason: f.block?.reason ?? null,
         }))}
         requiredAngles={requiredAngles.map((a) => ({ code: a, label: ANGLE_LABEL[a] ?? a }))}
+        termsVersion={terms?.version ?? null}
+        termsContent={terms?.content ?? null}
       />
     </div>
   );

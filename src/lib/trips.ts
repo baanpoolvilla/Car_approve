@@ -12,7 +12,7 @@ import {
 import type { PhotoAngle } from "@/db/schema";
 import { logAudit } from "./audit";
 import { queueNotification } from "./notify";
-import { getRequiredAngles } from "./settings";
+import { getActiveTerms, getRequiredAngles } from "./settings";
 import { powerWords } from "./labels";
 import type { SessionUser } from "./auth";
 import { supervisorRecipients } from "./recipients";
@@ -150,6 +150,7 @@ export type StartTripInput = {
   odometer: number;
   energyLevel: number;
   photoIds: string[];
+  acceptTerms: boolean;
 };
 
 export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: string | null) {
@@ -159,6 +160,10 @@ export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: 
   if (!Number.isInteger(input.odometer) || input.odometer < 0) rule("เลขไมล์ไม่ถูกต้อง");
   if (input.energyLevel < 0 || input.energyLevel > 100) rule("ระดับพลังงานต้องอยู่ระหว่าง 0–100");
   if (input.passengerCount < 1) rule("จำนวนผู้โดยสารต้องอย่างน้อย 1 คน");
+
+  // ข้อตกลงการใช้รถต้องถูกยอมรับใหม่ทุกครั้ง ไม่ใช่ครั้งเดียวจบ
+  const terms = await getActiveTerms();
+  if (!input.acceptTerms) rule("กรุณาอ่านและติ๊กยอมรับข้อตกลงการใช้รถก่อนเอารถออก");
 
   const vehicle = await db.query.vehicles.findFirst({ where: eq(vehicles.id, input.vehicleId) });
   if (!vehicle || !vehicle.isActive) rule("ไม่พบรถที่เลือก");
@@ -214,6 +219,9 @@ export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: 
           checkedOutAt: now,
           odometerOut: input.odometer,
           energyOut: input.energyLevel,
+          termsVersionId: terms?.id ?? null,
+          termsAcceptedAt: now,
+          termsAcceptedIp: ip ?? null,
         })
         .returning({ id: trips.id, tripNo: trips.tripNo });
 
@@ -239,6 +247,7 @@ export async function startTrip(actor: SessionUser, input: StartTripInput, ip?: 
           purpose: input.purpose,
           odometer: input.odometer,
           energyLevel: input.energyLevel,
+          termsVersion: terms?.version ?? null,
         },
         ip,
       });

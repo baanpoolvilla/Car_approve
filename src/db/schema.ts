@@ -205,6 +205,10 @@ export const trips = pgTable(
     hasDamage: boolean("has_damage").notNull().default(false),
     damageNote: text("damage_note"),
 
+    termsVersionId: uuid("terms_version_id"),
+    termsAcceptedAt: ts("terms_accepted_at"),
+    termsAcceptedIp: text("terms_accepted_ip"),
+
     cancelledAt: ts("cancelled_at"),
     cancelReason: text("cancel_reason"),
 
