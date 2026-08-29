@@ -39,6 +39,10 @@ Vercel → project `carapprove` → **Settings → Environment Variables** เ�
 
 จากนั้นไปที่ **Deployments → ... → Redeploy** เพื่อให้ค่าใหม่มีผล
 
+> `vercel.json` ตั้ง `"regions": ["sin1"]` ไว้แล้ว เพื่อให้ Vercel Function อยู่สิงคโปร์
+> ที่เดียวกับ Neon (`ap-southeast-1`) ถ้าย้าย Neon ไป region อื่น ต้องแก้ตรงนี้ตามด้วย
+> ไม่งั้นทุก query จะเสียเวลาข้ามทวีป
+
 ### 1.3 สร้างตารางและข้อมูลตั้งต้น
 
 ฐานข้อมูล Neon ที่เพิ่งสร้างยังว่างเปล่า ต้องสร้างตารางก่อน เลือกทางใดทางหนึ่ง
@@ -212,6 +216,23 @@ src/app/api/                 REST endpoints
 
 หลักการ: **business logic อยู่ใน `src/lib/` ไม่อยู่ในหน้าเว็บ** และการเปลี่ยนสถานะทุกครั้งทำใน transaction
 เดียวกับ audit log และการสร้าง notification
+
+### การเชื่อมต่อฐานข้อมูล
+
+ใช้ **node-postgres ผ่าน TCP** ไม่ใช่ Neon serverless driver (WebSocket)
+เพราะ Vercel Function เปิด WebSocket ไปหา Neon proxy ไม่ได้ — timeout ทุกครั้ง
+ผลตรวจจากรันไทม์จริง:
+
+| วิธี | ผล |
+|---|---|
+| Neon HTTP driver | ok ~0.8s (แต่ไม่รองรับ transaction) |
+| Neon WebSocket | ❌ timeout |
+| pg ผ่าน TCP | ok |
+| pg ผ่าน TCP + transaction | ok |
+
+ระบบต้องใช้ interactive transaction ทุกครั้งที่เปลี่ยนสถานะ จึงต้องใช้ TCP
+`DATABASE_URL` ต้องชี้ไปที่ **pooled endpoint** เสมอ เพื่อให้ PgBouncer ของ Neon
+รับหน้าที่ pooling แทน (serverless ทำเองไม่ได้)
 
 ---
 
