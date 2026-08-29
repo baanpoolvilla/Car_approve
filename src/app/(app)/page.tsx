@@ -1,15 +1,14 @@
 import Link from "next/link";
-import { and, eq, sql } from "drizzle-orm";
-import { db } from "@/db";
-import { approvalSteps, vehicleRequests, vehicles } from "@/db/schema";
-import { requireUserPage, isApprover, isFleet } from "@/lib/auth";
-import { listRequests } from "@/lib/queries";
-import RequestCard from "@/components/RequestCard";
-import { EmptyState, VehicleBadge } from "@/components/ui";
+import { requireUserPage } from "@/lib/auth";
+import { findOpenTrip, listVehicleStatus } from "@/lib/trips";
+import { listTrips } from "@/lib/queries";
+import { fmtDateTime, durationText } from "@/lib/datetime";
+import TripCard from "@/components/TripCard";
+import { EmptyState } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage({
+export default async function HomePage({
   searchParams,
 }: {
   searchParams: Promise<{ denied?: string }>;
@@ -17,33 +16,13 @@ export default async function DashboardPage({
   const user = await requireUserPage();
   const { denied } = await searchParams;
 
-  const [toCheckout, inUse, waiting, upcoming, fleetVehicles] = await Promise.all([
-    listRequests({ requesterId: user.id, statuses: ["APPROVED"], order: "asc", limit: 10 }),
-    listRequests({ requesterId: user.id, statuses: ["CHECKED_OUT"], order: "asc", limit: 10 }),
-    listRequests({ requesterId: user.id, statuses: ["PENDING_APPROVAL"], order: "asc", limit: 10 }),
-    listRequests({
-      requesterId: user.id,
-      statuses: ["APPROVED", "CHECKED_OUT"],
-      from: new Date(),
-      order: "asc",
-      limit: 5,
-    }),
-    db.select().from(vehicles).where(eq(vehicles.isActive, true)).orderBy(vehicles.brand),
+  const [openTrip, fleet, recent] = await Promise.all([
+    findOpenTrip(user.id),
+    listVehicleStatus(),
+    listTrips({ driverId: user.id, statuses: ["COMPLETED"], limit: 3 }),
   ]);
 
-  const [approvalCount] = isApprover(user)
-    ? await db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(approvalSteps)
-        .where(and(eq(approvalSteps.approverId, user.id), eq(approvalSteps.status, "PENDING")))
-    : [{ n: 0 }];
-
-  const [returnedCount] = isFleet(user)
-    ? await db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(vehicleRequests)
-        .where(eq(vehicleRequests.status, "RETURNED"))
-    : [{ n: 0 }];
+  const freeCount = fleet.filter((f) => f.available).length;
 
   return (
     <div className="space-y-5">
@@ -58,104 +37,99 @@ export default async function DashboardPage({
         <h1 className="text-xl font-bold text-slate-900">{user.name}</h1>
       </div>
 
-      <Link href="/requests/new" className="btn-primary w-full py-3 text-base">
-        ➕ ขอใช้รถ
-      </Link>
-
-      {(approvalCount.n > 0 || returnedCount.n > 0) && (
-        <div className="grid grid-cols-2 gap-3">
-          {approvalCount.n > 0 && (
-            <Link href="/approvals" className="card text-center">
-              <p className="text-2xl font-bold text-amber-600">{approvalCount.n}</p>
-              <p className="text-xs text-slate-500">คำขอรออนุมัติ</p>
-            </Link>
-          )}
-          {returnedCount.n > 0 && (
-            <Link href="/fleet/returns" className="card text-center">
-              <p className="text-2xl font-bold text-orange-600">{returnedCount.n}</p>
-              <p className="text-xs text-slate-500">คืนรถรอตรวจ</p>
-            </Link>
-          )}
-        </div>
-      )}
-
-      {inUse.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">🚙 กำลังใช้งาน – ต้องคืนรถ</h2>
-          <div className="space-y-2">
-            {inUse.map((r) => (
-              <RequestCard key={r.id} r={r} />
-            ))}
+      {openTrip ? (
+        <section className="rounded-xl border-2 border-indigo-300 bg-indigo-50 p-4">
+          <p className="text-xs font-medium text-indigo-700">คุณกำลังถือรถอยู่</p>
+          <p className="mt-1 text-lg font-bold text-slate-900">
+            {fleet.find((f) => f.vehicle.id === openTrip.vehicleId)?.vehicle.brand}{" "}
+            {fleet.find((f) => f.vehicle.id === openTrip.vehicleId)?.vehicle.model ?? ""}
+          </p>
+          <div className="mt-2 space-y-0.5 text-xs text-slate-600">
+            <p>📍 {openTrip.destination}</p>
+            <p>
+              🕒 ออกไปเมื่อ {fmtDateTime(openTrip.checkedOutAt)} ({durationText(openTrip.checkedOutAt, new Date())})
+            </p>
+            {openTrip.expectedReturnAt && (
+              <p>⏰ แจ้งว่าจะคืน {fmtDateTime(openTrip.expectedReturnAt)}</p>
+            )}
           </div>
+          <Link href={`/trips/${openTrip.id}/return`} className="btn-primary mt-3 w-full py-3 text-base">
+            🏁 คืนรถ
+          </Link>
+          <Link
+            href={`/trips/${openTrip.id}`}
+            className="mt-2 block text-center text-xs text-blue-700"
+          >
+            ดูรายละเอียด
+          </Link>
         </section>
-      )}
-
-      {toCheckout.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">✅ อนุมัติแล้ว – รอรับรถ</h2>
-          <div className="space-y-2">
-            {toCheckout.map((r) => (
-              <RequestCard key={r.id} r={r} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {waiting.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">⏳ รออนุมัติ</h2>
-          <div className="space-y-2">
-            {waiting.map((r) => (
-              <RequestCard key={r.id} r={r} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {inUse.length === 0 && toCheckout.length === 0 && waiting.length === 0 && (
-        <EmptyState
-          text="ยังไม่มีรายการที่ต้องดำเนินการ"
-          cta={
-            <Link href="/requests/new" className="btn-secondary">
-              สร้างคำขอใช้รถ
-            </Link>
-          }
-        />
+      ) : (
+        <Link href="/trips/new" className="btn-primary w-full py-4 text-base">
+          🚗 เอารถออก
+        </Link>
       )}
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">สถานะรถ</h2>
-          <Link href="/calendar" className="text-xs text-blue-700">
-            ดูปฏิทิน →
-          </Link>
+          <h2 className="text-sm font-semibold text-slate-700">สถานะรถตอนนี้</h2>
+          <span className="text-xs text-slate-500">
+            ว่าง {freeCount} / {fleet.length} คัน
+          </span>
         </div>
         <div className="space-y-2">
-          {fleetVehicles.map((v) => (
-            <div key={v.id} className="card flex items-center justify-between py-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  {v.brand} {v.model ?? ""}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {v.plateNumber} · {v.currentOdometer.toLocaleString("th-TH")} กม.
-                </p>
+          {fleet.map((f) => (
+            <div key={f.vehicle.id} className="card py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {f.vehicle.brand} {f.vehicle.model ?? ""}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {f.vehicle.plateNumber} · {f.vehicle.currentOdometer.toLocaleString("th-TH")} กม.
+                  </p>
+                </div>
+                <span
+                  className={`chip ${
+                    f.available
+                      ? "bg-emerald-100 text-emerald-800"
+                      : f.openTrip
+                        ? "bg-indigo-100 text-indigo-800"
+                        : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {f.available ? "ว่าง" : f.openTrip ? "ถูกใช้อยู่" : "ไม่พร้อมใช้"}
+                </span>
               </div>
-              <VehicleBadge status={v.status} />
+              {f.openTrip && (
+                <p className="mt-1.5 text-xs text-slate-600">
+                  👤 {f.openTrip.driverName} · 📍 {f.openTrip.destination}
+                  <br />
+                  🕒 ตั้งแต่ {fmtDateTime(f.openTrip.checkedOutAt)}
+                </p>
+              )}
+              {f.block && <p className="mt-1.5 text-xs text-slate-500">🔒 {f.block.reason}</p>}
             </div>
           ))}
         </div>
       </section>
 
-      {upcoming.length > 0 && (
-        <p className="text-center text-xs text-slate-400">
-          ทริปถัดไปของคุณเริ่ม {new Intl.DateTimeFormat("th-TH", {
-            timeZone: "Asia/Bangkok",
-            dateStyle: "medium",
-            timeStyle: "short",
-          }).format(upcoming[0].plannedStartAt)} น.
-        </p>
-      )}
+      <section>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">การใช้รถล่าสุดของคุณ</h2>
+          <Link href="/trips" className="text-xs text-blue-700">
+            ดูทั้งหมด →
+          </Link>
+        </div>
+        {recent.length === 0 ? (
+          <EmptyState text="ยังไม่มีประวัติการใช้รถ" />
+        ) : (
+          <div className="space-y-2">
+            {recent.map((t) => (
+              <TripCard key={t.id} t={t} />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

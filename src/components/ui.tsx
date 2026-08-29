@@ -1,28 +1,22 @@
 import Link from "next/link";
-import type { RequestStatus } from "@/db/schema";
+import type { TripStatus } from "@/db/schema";
 import { STATUS_LABEL_MAP } from "@/lib/labels";
 
 export const STATUS_LABEL = STATUS_LABEL_MAP;
 
-const STATUS_CLASS: Record<RequestStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  PENDING_APPROVAL: "bg-amber-100 text-amber-800",
-  APPROVED: "bg-blue-100 text-blue-800",
-  REJECTED: "bg-red-100 text-red-800",
-  CHECKED_OUT: "bg-indigo-100 text-indigo-800",
-  RETURNED: "bg-orange-100 text-orange-800",
+const STATUS_CLASS: Record<TripStatus, string> = {
+  IN_USE: "bg-indigo-100 text-indigo-800",
   COMPLETED: "bg-emerald-100 text-emerald-800",
   CANCELLED: "bg-slate-200 text-slate-600",
-  EXPIRED: "bg-slate-200 text-slate-600",
 };
 
-export function StatusBadge({ status }: { status: RequestStatus }) {
+export function StatusBadge({ status }: { status: TripStatus }) {
   return <span className={`chip ${STATUS_CLASS[status]}`}>{STATUS_LABEL[status]}</span>;
 }
 
 export const VEHICLE_STATUS_LABEL: Record<string, string> = {
-  AVAILABLE: "พร้อมใช้งาน",
-  IN_USE: "กำลังใช้งาน",
+  AVAILABLE: "ว่าง",
+  IN_USE: "ถูกใช้อยู่",
   MAINTENANCE: "ซ่อมบำรุง",
   INACTIVE: "ปิดใช้งาน",
 };

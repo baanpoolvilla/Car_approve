@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { AuthError, LoginError } from "./auth";
-import { RuleError } from "./workflow";
+import { RuleError } from "./trips";
 
 export function ok<T>(data: T, init?: number) {
   return NextResponse.json(data as object, { status: init ?? 200 });

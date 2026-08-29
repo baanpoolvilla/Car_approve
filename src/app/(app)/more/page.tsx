@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const ROLE_LABEL: Record<string, string> = {
   EMPLOYEE: "พนักงาน",
-  APPROVER: "ผู้อนุมัติ",
+  APPROVER: "ผู้รับแจ้งเตือน",
   FLEET_MANAGER: "ผู้ดูแลรถ",
   ADMIN: "ผู้ดูแลระบบ",
   AUDITOR: "ผู้ตรวจสอบ",
@@ -47,8 +47,7 @@ export default async function MorePage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <MenuLink href="/calendar" icon="📅" label="ปฏิทินการใช้รถ" />
-        <MenuLink href="/requests" icon="📋" label="ประวัติการใช้รถ" />
+        <MenuLink href="/trips" icon="📋" label="ประวัติการใช้รถ" />
         <MenuLink href="/notifications" icon="🔔" label="การแจ้งเตือน" />
         <MenuLink href="/terms" icon="📄" label="เงื่อนไขการใช้รถ" />
       </div>
@@ -58,9 +57,8 @@ export default async function MorePage() {
           <p className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-500">
             ผู้ดูแลรถ
           </p>
-          <MenuLink href="/fleet" icon="🚗" label="Fleet Dashboard" />
-          <MenuLink href="/fleet/returns" icon="🏁" label="คืนรถรอตรวจ" />
-          <MenuLink href="/reports" icon="📊" label="รายงานและ Export" />
+          <MenuLink href="/fleet" icon="📊" label="Fleet Dashboard" />
+          <MenuLink href="/reports" icon="📈" label="รายงานและ Export" />
         </div>
       )}
 
@@ -71,8 +69,6 @@ export default async function MorePage() {
           </p>
           <MenuLink href="/admin/users" icon="👥" label="ผู้ใช้และสิทธิ์" />
           <MenuLink href="/admin/vehicles" icon="🚙" label="ข้อมูลรถ" />
-          <MenuLink href="/admin/checklist" icon="✅" label="Checklist และรูปบังคับ" />
-          <MenuLink href="/admin/terms" icon="📜" label="เงื่อนไขการใช้รถ" />
         </div>
       )}
 

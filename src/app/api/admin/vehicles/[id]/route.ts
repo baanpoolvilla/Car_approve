@@ -1,10 +1,9 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { vehicleRequests, vehicles } from "@/db/schema";
+import { trips, vehicles } from "@/db/schema";
 import { body, fail, ok, route } from "@/lib/api";
 import { requireRole } from "@/lib/auth";
 import { logAuditStandalone } from "@/lib/audit";
-import { BLOCKING_STATUSES } from "@/lib/workflow";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,16 +33,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     // Vehicles with history are retired, never deleted.
     if (p.isActive === false || p.status === "INACTIVE" || p.status === "MAINTENANCE") {
       const active = await db
-        .select({ id: vehicleRequests.id })
-        .from(vehicleRequests)
-        .where(
-          and(
-            eq(vehicleRequests.vehicleId, id),
-            inArray(vehicleRequests.status, [...BLOCKING_STATUSES, "PENDING_APPROVAL"])
-          )
-        );
+        .select({ id: trips.id })
+        .from(trips)
+        .where(and(eq(trips.vehicleId, id), eq(trips.status, "IN_USE")));
       if (active.length > 0) {
-        return fail(`ยังมีคำขอที่ใช้รถคันนี้อยู่ ${active.length} รายการ กรุณาจัดการก่อน`);
+        return fail("รถคันนี้กำลังถูกใช้งานอยู่ กรุณารอให้คืนรถก่อน");
       }
     }
 

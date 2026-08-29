@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { inspections, users, vehicleRequests, vehicles } from "@/db/schema";
+import { trips, users, vehicles } from "@/db/schema";
 import { requireRolePage } from "@/lib/auth";
-import { fmtDate, fmtRange } from "@/lib/datetime";
+import { fmtDate, fmtDateTime } from "@/lib/datetime";
 import { BackLink, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -30,65 +30,68 @@ export default async function ReportsPage({
   const vehicleId = sp.v ?? "";
 
   const conditions: (SQL | undefined)[] = [
-    gte(vehicleRequests.plannedStartAt, new Date(`${from}T00:00:00+07:00`)),
-    lte(vehicleRequests.plannedStartAt, new Date(`${to}T23:59:59+07:00`)),
+    gte(trips.checkedOutAt, new Date(`${from}T00:00:00+07:00`)),
+    lte(trips.checkedOutAt, new Date(`${to}T23:59:59+07:00`)),
   ];
-  if (vehicleId) conditions.push(eq(vehicleRequests.vehicleId, vehicleId));
+  if (vehicleId) conditions.push(eq(trips.vehicleId, vehicleId));
 
-  const [rows, fleet, inspectionRows] = await Promise.all([
+  const [rows, fleet] = await Promise.all([
     db
-      .select({ r: vehicleRequests, v: vehicles, u: users })
-      .from(vehicleRequests)
-      .innerJoin(users, eq(users.id, vehicleRequests.requesterId))
-      .leftJoin(vehicles, eq(vehicles.id, vehicleRequests.vehicleId))
+      .select({ t: trips, v: vehicles, u: users })
+      .from(trips)
+      .innerJoin(users, eq(users.id, trips.driverId))
+      .innerJoin(vehicles, eq(vehicles.id, trips.vehicleId))
       .where(and(...conditions))
-      .orderBy(asc(vehicleRequests.plannedStartAt))
+      .orderBy(asc(trips.checkedOutAt))
       .limit(500),
     db.select().from(vehicles).orderBy(asc(vehicles.brand)),
-    db.select().from(inspections),
   ]);
 
-  const odoByRequest = new Map<string, { before?: number; after?: number }>();
-  for (const i of inspectionRows) {
-    const e = odoByRequest.get(i.requestId) ?? {};
-    if (i.phase === "BEFORE") e.before = i.odometer;
-    else e.after = i.odometer;
-    odoByRequest.set(i.requestId, e);
-  }
-
-  const completed = rows.filter((x) => ["COMPLETED", "RETURNED"].includes(x.r.status));
   let totalKm = 0;
   const kmByVehicle = new Map<string, number>();
-  for (const { r } of completed) {
-    const e = odoByRequest.get(r.id);
-    if (e?.before !== undefined && e?.after !== undefined) {
-      const d = Math.max(0, e.after - e.before);
-      totalKm += d;
-      if (r.vehicleId) kmByVehicle.set(r.vehicleId, (kmByVehicle.get(r.vehicleId) ?? 0) + d);
-    }
-  }
-  const damaged = rows.filter((x) => x.r.hasNewDamage).length;
+  const tripsByDriver = new Map<string, { name: string; trips: number; km: number }>();
 
+  for (const { t, u } of rows) {
+    if (t.status !== "COMPLETED" || t.odometerIn === null) continue;
+    const d = Math.max(0, t.odometerIn - t.odometerOut);
+    totalKm += d;
+    kmByVehicle.set(t.vehicleId, (kmByVehicle.get(t.vehicleId) ?? 0) + d);
+    const entry = tripsByDriver.get(t.driverId) ?? { name: u.name, trips: 0, km: 0 };
+    entry.trips += 1;
+    entry.km += d;
+    tripsByDriver.set(t.driverId, entry);
+  }
+
+  const damaged = rows.filter((x) => x.t.hasDamage).length;
   const exportQs = new URLSearchParams({ from, to, ...(vehicleId ? { vehicleId } : {}) });
 
   return (
     <div>
       <BackLink href="/more" label="เมนู" />
-      <PageHeader title="รายงานการใช้รถ" subtitle={`${fmtDate(new Date(from))} – ${fmtDate(new Date(to))}`} />
+      <PageHeader
+        title="รายงานการใช้รถ"
+        subtitle={`${fmtDate(new Date(from))} – ${fmtDate(new Date(to))}`}
+      />
 
       <form className="card mb-3 space-y-3" method="get">
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="label" htmlFor="from">ตั้งแต่</label>
+            <label className="label" htmlFor="from">
+              ตั้งแต่
+            </label>
             <input id="from" name="from" type="date" className="input" defaultValue={from} />
           </div>
           <div>
-            <label className="label" htmlFor="to">ถึง</label>
+            <label className="label" htmlFor="to">
+              ถึง
+            </label>
             <input id="to" name="to" type="date" className="input" defaultValue={to} />
           </div>
         </div>
         <div>
-          <label className="label" htmlFor="v">รถ</label>
+          <label className="label" htmlFor="v">
+            รถ
+          </label>
           <select id="v" name="v" className="input" defaultValue={vehicleId}>
             <option value="">ทุกคัน</option>
             {fleet.map((v) => (
@@ -104,7 +107,7 @@ export default async function ReportsPage({
       <div className="mb-3 grid grid-cols-3 gap-2">
         <div className="card text-center">
           <p className="text-xl font-bold text-slate-900">{rows.length}</p>
-          <p className="text-[11px] text-slate-500">คำขอทั้งหมด</p>
+          <p className="text-[11px] text-slate-500">ครั้งที่ใช้รถ</p>
         </div>
         <div className="card text-center">
           <p className="text-xl font-bold text-blue-700">{totalKm.toLocaleString("th-TH")}</p>
@@ -122,11 +125,35 @@ export default async function ReportsPage({
           {fleet
             .filter((v) => kmByVehicle.has(v.id))
             .map((v) => (
-              <div key={v.id} className="flex justify-between border-b border-slate-100 py-1.5 text-sm last:border-0">
+              <div
+                key={v.id}
+                className="flex justify-between border-b border-slate-100 py-1.5 text-sm last:border-0"
+              >
                 <span className="text-slate-600">
                   {v.brand} {v.model ?? ""}
                 </span>
-                <span className="font-medium">{(kmByVehicle.get(v.id) ?? 0).toLocaleString("th-TH")} กม.</span>
+                <span className="font-medium">
+                  {(kmByVehicle.get(v.id) ?? 0).toLocaleString("th-TH")} กม.
+                </span>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {tripsByDriver.size > 0 && (
+        <div className="card mb-3">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">แยกตามผู้ใช้รถ</h2>
+          {Array.from(tripsByDriver.values())
+            .sort((a, b) => b.km - a.km)
+            .map((d) => (
+              <div
+                key={d.name}
+                className="flex justify-between border-b border-slate-100 py-1.5 text-sm last:border-0"
+              >
+                <span className="text-slate-600">{d.name}</span>
+                <span className="font-medium">
+                  {d.trips} ครั้ง · {d.km.toLocaleString("th-TH")} กม.
+                </span>
               </div>
             ))}
         </div>
@@ -140,23 +167,23 @@ export default async function ReportsPage({
         <EmptyState text="ไม่พบข้อมูลในช่วงที่เลือก" />
       ) : (
         <div className="space-y-2">
-          {rows.map(({ r, v, u }) => {
-            const e = odoByRequest.get(r.id);
-            const km =
-              e?.before !== undefined && e?.after !== undefined ? e.after - e.before : null;
+          {rows.map(({ t, v, u }) => {
+            const km = t.odometerIn !== null ? t.odometerIn - t.odometerOut : null;
             return (
-              <Link key={r.id} href={`/requests/${r.id}`} className="card block hover:border-blue-300">
+              <Link key={t.id} href={`/trips/${t.id}`} className="card block hover:border-blue-300">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900">{r.purpose}</p>
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {t.destination}
+                    </p>
                     <p className="text-xs text-slate-500">
-                      {r.requestNo} · {u.name} · {v?.brand ?? "-"} {v?.model ?? ""}
+                      {t.tripNo} · {u.name} · {v.brand} {v.model ?? ""}
                     </p>
                   </div>
-                  <StatusBadge status={r.status} />
+                  <StatusBadge status={t.status} />
                 </div>
                 <p className="mt-1 text-xs text-slate-600">
-                  🕒 {fmtRange(r.plannedStartAt, r.plannedEndAt)}
+                  🕒 {fmtDateTime(t.checkedOutAt)}
                   {km !== null ? ` · ${km.toLocaleString("th-TH")} กม.` : ""}
                 </p>
               </Link>

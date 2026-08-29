@@ -15,6 +15,11 @@ import {
 
 /* ---------------------------------------------------------------- enums */
 
+/**
+ * APPROVER is kept as the stored value for historical reasons — there is no
+ * approval step any more, so the UI calls this role "ผู้รับแจ้งเตือน":
+ * people who get told whenever a car leaves or comes back.
+ */
 export const roleEnum = pgEnum("role_code", [
   "EMPLOYEE",
   "APPROVER",
@@ -30,33 +35,10 @@ export const vehicleStatusEnum = pgEnum("vehicle_status", [
   "INACTIVE",
 ]);
 
-export const requestStatusEnum = pgEnum("request_status", [
-  "DRAFT",
-  "PENDING_APPROVAL",
-  "APPROVED",
-  "REJECTED",
-  "CHECKED_OUT",
-  "RETURNED",
-  "COMPLETED",
-  "CANCELLED",
-  "EXPIRED",
-]);
+export const tripStatusEnum = pgEnum("trip_status", ["IN_USE", "COMPLETED", "CANCELLED"]);
 
-export const approvalStatusEnum = pgEnum("approval_status", [
-  "WAITING",
-  "PENDING",
-  "APPROVED",
-  "REJECTED",
-  "SKIPPED",
-]);
-
-export const inspectionPhaseEnum = pgEnum("inspection_phase", ["BEFORE", "AFTER"]);
-
-export const inspectionResultEnum = pgEnum("inspection_result", [
-  "NORMAL",
-  "DAMAGED",
-  "NOT_APPLICABLE",
-]);
+/** BEFORE = ตอนเอารถออก, AFTER = ตอนคืนรถ */
+export const photoPhaseEnum = pgEnum("inspection_phase", ["BEFORE", "AFTER"]);
 
 export const photoAngleEnum = pgEnum("photo_angle", [
   "FRONT",
@@ -185,127 +167,58 @@ export const vehicleUnavailability = pgTable(
   (t) => [index("vehicle_unavail_idx").on(t.vehicleId, t.startAt, t.endAt)]
 );
 
-/* -------------------------------------------------------------- requests */
+/* ----------------------------------------------------------------- trips */
 
-export const vehicleRequests = pgTable(
-  "vehicle_requests",
+export const trips = pgTable(
+  "trips",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    requestNo: text("request_no").notNull(),
-    requesterId: uuid("requester_id")
+    tripNo: text("trip_no").notNull(),
+    driverId: uuid("driver_id")
       .notNull()
       .references(() => users.id),
-    vehicleId: uuid("vehicle_id").references(() => vehicles.id),
-    plannedStartAt: ts("planned_start_at").notNull(),
-    plannedEndAt: ts("planned_end_at").notNull(),
+    vehicleId: uuid("vehicle_id")
+      .notNull()
+      .references(() => vehicles.id),
+
     purpose: text("purpose").notNull(),
     destination: text("destination").notNull(),
     passengerCount: integer("passenger_count").notNull().default(1),
     passengers: text("passengers"),
     note: text("note"),
-    status: requestStatusEnum("status").notNull().default("DRAFT"),
-    submittedAt: ts("submitted_at"),
-    decidedAt: ts("decided_at"),
-    checkedOutAt: ts("checked_out_at"),
+    expectedReturnAt: ts("expected_return_at"),
+
+    status: tripStatusEnum("status").notNull().default("IN_USE"),
+
+    checkedOutAt: ts("checked_out_at").notNull().defaultNow(),
+    odometerOut: integer("odometer_out").notNull(),
+    fuelOut: integer("fuel_out").notNull(),
+
     returnedAt: ts("returned_at"),
-    completedAt: ts("completed_at"),
+    odometerIn: integer("odometer_in"),
+    fuelIn: integer("fuel_in"),
+
+    hasDamage: boolean("has_damage").notNull().default(false),
+    damageNote: text("damage_note"),
+
     cancelledAt: ts("cancelled_at"),
     cancelReason: text("cancel_reason"),
-    hasNewDamage: boolean("has_new_damage").notNull().default(false),
-    version: integer("version").notNull().default(1),
+
     createdAt: createdAt(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("vehicle_requests_no_uk").on(t.requestNo),
-    index("vehicle_requests_requester_idx").on(t.requesterId, t.status),
-    index("vehicle_requests_vehicle_idx").on(
-      t.vehicleId,
-      t.plannedStartAt,
-      t.plannedEndAt
-    ),
-    index("vehicle_requests_status_idx").on(t.status, t.plannedStartAt),
+    uniqueIndex("trips_no_uk").on(t.tripNo),
+    index("trips_driver_idx").on(t.driverId, t.checkedOutAt),
+    index("trips_vehicle_idx").on(t.vehicleId, t.checkedOutAt),
+    index("trips_status_idx").on(t.status, t.checkedOutAt),
   ]
 );
 
-export const requestCounters = pgTable("request_counters", {
+export const tripCounters = pgTable("trip_counters", {
   year: integer("year").primaryKey(),
   lastNo: integer("last_no").notNull().default(0),
 });
-
-/* -------------------------------------------------------------- approval */
-
-export const approvalSteps = pgTable(
-  "approval_steps",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    requestId: uuid("request_id")
-      .notNull()
-      .references(() => vehicleRequests.id, { onDelete: "cascade" }),
-    sequence: integer("sequence").notNull(),
-    approverId: uuid("approver_id")
-      .notNull()
-      .references(() => users.id),
-    status: approvalStatusEnum("status").notNull().default("PENDING"),
-    decisionComment: text("decision_comment"),
-    actedAt: ts("acted_at"),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    uniqueIndex("approval_steps_uk").on(t.requestId, t.approverId),
-    index("approval_steps_inbox_idx").on(t.approverId, t.status),
-  ]
-);
-
-/* ------------------------------------------------------------ checklists */
-
-export const checklistDefinitions = pgTable("checklist_definitions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  code: text("code").notNull(),
-  name: text("name").notNull(),
-  category: text("category"),
-  sortOrder: integer("sort_order").notNull().default(0),
-  isRequired: boolean("is_required").notNull().default(true),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: createdAt(),
-});
-
-export const inspections = pgTable(
-  "inspections",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    requestId: uuid("request_id")
-      .notNull()
-      .references(() => vehicleRequests.id, { onDelete: "cascade" }),
-    phase: inspectionPhaseEnum("phase").notNull(),
-    odometer: integer("odometer").notNull(),
-    fuelLevel: integer("fuel_level").notNull(),
-    generalStatus: inspectionResultEnum("general_status").notNull().default("NORMAL"),
-    damageNote: text("damage_note"),
-    submittedBy: uuid("submitted_by")
-      .notNull()
-      .references(() => users.id),
-    submittedAt: ts("submitted_at").notNull().defaultNow(),
-    createdAt: createdAt(),
-  },
-  (t) => [uniqueIndex("inspections_request_phase_uk").on(t.requestId, t.phase)]
-);
-
-export const inspectionChecklistItems = pgTable(
-  "inspection_checklist_items",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    inspectionId: uuid("inspection_id")
-      .notNull()
-      .references(() => inspections.id, { onDelete: "cascade" }),
-    checklistItemId: uuid("checklist_item_id")
-      .notNull()
-      .references(() => checklistDefinitions.id),
-    result: inspectionResultEnum("result").notNull(),
-    note: text("note"),
-  },
-  (t) => [uniqueIndex("inspection_items_uk").on(t.inspectionId, t.checklistItemId)]
-);
 
 /* ----------------------------------------------------------------- files */
 
@@ -321,43 +234,15 @@ export const files = pgTable("files", {
   createdAt: createdAt(),
 });
 
-export const photos = pgTable(
-  "photos",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    fileId: uuid("file_id")
-      .notNull()
-      .references(() => files.id),
-    requestId: uuid("request_id").references(() => vehicleRequests.id, {
-      onDelete: "cascade",
-    }),
-    inspectionId: uuid("inspection_id").references(() => inspections.id, {
-      onDelete: "cascade",
-    }),
-    incidentId: uuid("incident_id"),
-    phase: inspectionPhaseEnum("phase"),
-    angle: photoAngleEnum("angle").notNull().default("OTHER"),
-    caption: text("caption"),
-    capturedAt: ts("captured_at"),
-    uploadedBy: uuid("uploaded_by").references(() => users.id),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    index("photos_request_idx").on(t.requestId),
-    index("photos_inspection_idx").on(t.inspectionId),
-    index("photos_incident_idx").on(t.incidentId),
-  ]
-);
-
 /* ------------------------------------------------------------- incidents */
 
 export const incidents = pgTable(
   "incidents",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    requestId: uuid("request_id")
+    tripId: uuid("trip_id")
       .notNull()
-      .references(() => vehicleRequests.id, { onDelete: "cascade" }),
+      .references(() => trips.id, { onDelete: "cascade" }),
     severity: incidentSeverityEnum("severity").notNull().default("MINOR"),
     occurredAt: ts("occurred_at").notNull(),
     location: text("location"),
@@ -375,7 +260,30 @@ export const incidents = pgTable(
     createdAt: createdAt(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },
-  (t) => [index("incidents_request_idx").on(t.requestId)]
+  (t) => [index("incidents_trip_idx").on(t.tripId)]
+);
+
+/* ---------------------------------------------------------------- photos */
+
+export const photos = pgTable(
+  "photos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => files.id),
+    tripId: uuid("trip_id").references(() => trips.id, { onDelete: "cascade" }),
+    incidentId: uuid("incident_id").references(() => incidents.id, {
+      onDelete: "cascade",
+    }),
+    phase: photoPhaseEnum("phase"),
+    angle: photoAngleEnum("angle").notNull().default("OTHER"),
+    caption: text("caption"),
+    capturedAt: ts("captured_at"),
+    uploadedBy: uuid("uploaded_by").references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("photos_trip_idx").on(t.tripId), index("photos_incident_idx").on(t.incidentId)]
 );
 
 /* ----------------------------------------------------------------- terms */
@@ -387,21 +295,6 @@ export const termsVersions = pgTable("terms_versions", {
   effectiveAt: ts("effective_at").notNull().defaultNow(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: createdAt(),
-});
-
-export const termsAcceptances = pgTable("terms_acceptances", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  termsVersionId: uuid("terms_version_id")
-    .notNull()
-    .references(() => termsVersions.id),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id),
-  requestId: uuid("request_id").references(() => vehicleRequests.id, {
-    onDelete: "cascade",
-  }),
-  acceptedAt: ts("accepted_at").notNull().defaultNow(),
-  ipAddress: text("ip_address"),
 });
 
 /* --------------------------------------------------------- notifications */
@@ -456,7 +349,7 @@ export const settings = pgTable("settings", {
 
 export type User = typeof users.$inferSelect;
 export type Vehicle = typeof vehicles.$inferSelect;
-export type VehicleRequest = typeof vehicleRequests.$inferSelect;
+export type Trip = typeof trips.$inferSelect;
 export type RoleCode = (typeof roleEnum.enumValues)[number];
-export type RequestStatus = (typeof requestStatusEnum.enumValues)[number];
+export type TripStatus = (typeof tripStatusEnum.enumValues)[number];
 export type PhotoAngle = (typeof photoAngleEnum.enumValues)[number];

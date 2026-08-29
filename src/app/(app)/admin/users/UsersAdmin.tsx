@@ -15,7 +15,7 @@ type Row = {
 };
 
 const ASSIGNABLE: { code: RoleCode; label: string }[] = [
-  { code: "APPROVER", label: "ผู้อนุมัติ" },
+  { code: "APPROVER", label: "ผู้รับแจ้งเตือน" },
   { code: "FLEET_MANAGER", label: "ผู้ดูแลรถ" },
   { code: "ADMIN", label: "ผู้ดูแลระบบ" },
   { code: "AUDITOR", label: "ผู้ตรวจสอบ" },

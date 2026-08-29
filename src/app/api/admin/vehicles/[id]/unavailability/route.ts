@@ -1,11 +1,9 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { vehicleUnavailability, vehicles } from "@/db/schema";
+import { trips, vehicleUnavailability, vehicles } from "@/db/schema";
 import { body, fail, ok, route } from "@/lib/api";
 import { requireRole } from "@/lib/auth";
 import { logAuditStandalone } from "@/lib/audit";
-import { findConflicts, BLOCKING_STATUSES } from "@/lib/workflow";
-import type { RequestStatus } from "@/db/schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,9 +23,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return fail("วันเวลาไม่ถูกต้อง");
     if (end <= start) return fail("เวลาสิ้นสุดต้องหลังเวลาเริ่ม");
 
-    const { conflicts } = await findConflicts(id, start, end);
-    const hard = conflicts.filter((c) => BLOCKING_STATUSES.includes(c.status as RequestStatus));
-    if (hard.length > 0) return fail(`มีการจองที่อนุมัติแล้วในช่วงนี้ (${hard[0].requestNo})`);
+    // Without advance booking the only clash is a car that is out right now.
+    const open = await db
+      .select({ tripNo: trips.tripNo })
+      .from(trips)
+      .where(and(eq(trips.vehicleId, id), eq(trips.status, "IN_USE")));
+    if (open.length > 0 && start <= new Date()) {
+      return fail(`รถคันนี้กำลังถูกใช้งานอยู่ (${open[0].tripNo}) กรุณารอให้คืนรถก่อน`);
+    }
 
     const [row] = await db
       .insert(vehicleUnavailability)

@@ -6,7 +6,7 @@ import { compressImage } from "@/lib/image";
 export type CapturedPhoto = { id: string; url: string; angle: string };
 
 export default function PhotoCapture({
-  requestId,
+  tripId,
   angle,
   label,
   required = false,
@@ -14,7 +14,8 @@ export default function PhotoCapture({
   value,
   onChange,
 }: {
-  requestId: string;
+  /** Omitted while taking a car out — the trip row does not exist yet. */
+  tripId?: string | null;
   angle: string;
   label: string;
   required?: boolean;
@@ -36,7 +37,7 @@ export default function PhotoCapture({
         const file = await compressImage(raw);
         const form = new FormData();
         form.append("file", file);
-        form.append("requestId", requestId);
+        if (tripId) form.append("tripId", tripId);
         form.append("angle", angle);
         const res = await fetch("/api/uploads", { method: "POST", body: form });
         const data = await res.json();

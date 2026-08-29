@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { files, photos, vehicleRequests } from "@/db/schema";
+import { files, photos, trips } from "@/db/schema";
 import { fail, ok, route } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 
@@ -11,15 +11,17 @@ async function loadPhoto(id: string) {
   const rows = await db
     .select({
       photoId: photos.id,
-      inspectionId: photos.inspectionId,
-      requesterId: vehicleRequests.requesterId,
+      tripId: photos.tripId,
+      tripStatus: trips.status,
+      driverId: trips.driverId,
+      uploadedBy: photos.uploadedBy,
       mimeType: files.mimeType,
       data: files.data,
       fileId: files.id,
     })
     .from(photos)
     .innerJoin(files, eq(files.id, photos.fileId))
-    .leftJoin(vehicleRequests, eq(vehicleRequests.id, photos.requestId))
+    .leftJoin(trips, eq(trips.id, photos.tripId))
     .where(eq(photos.id, id))
     .limit(1);
   return rows[0];
@@ -27,7 +29,7 @@ async function loadPhoto(id: string) {
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return route(async () => {
-    // Every authenticated staff member may view fleet photos; anonymous access is denied.
+    // Any signed-in staff member may view fleet photos; anonymous access is denied.
     await requireUser();
     const { id } = await ctx.params;
     const row = await loadPhoto(id);
@@ -49,10 +51,15 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     const { id } = await ctx.params;
     const row = await loadPhoto(id);
     if (!row) return fail("ไม่พบรูป", 404);
-    if (row.inspectionId) return fail("รูปนี้ถูกบันทึกในการตรวจรถแล้ว ลบไม่ได้", 400);
+
+    // Once a trip is closed its photos are the record — they stay.
+    if (row.tripId && row.tripStatus !== "IN_USE") {
+      return fail("รายการนี้ปิดแล้ว ลบรูปไม่ได้", 400);
+    }
 
     const owner =
-      row.requesterId === user.id ||
+      row.uploadedBy === user.id ||
+      row.driverId === user.id ||
       user.roles.includes("FLEET_MANAGER") ||
       user.roles.includes("ADMIN");
     if (!owner) return fail("คุณไม่มีสิทธิ์ลบรูปนี้", 403);

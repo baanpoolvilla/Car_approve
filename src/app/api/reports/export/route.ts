@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { inspections, users, vehicleRequests, vehicles } from "@/db/schema";
+import { trips, users, vehicles } from "@/db/schema";
 import { requireRole } from "@/lib/auth";
 import { logAuditStandalone } from "@/lib/audit";
 import { fmtDateTime } from "@/lib/datetime";
@@ -24,83 +24,65 @@ export async function GET(req: Request) {
     const vehicleId = url.searchParams.get("vehicleId");
 
     const conditions: (SQL | undefined)[] = [];
-    if (from) conditions.push(gte(vehicleRequests.plannedStartAt, new Date(`${from}T00:00:00+07:00`)));
-    if (to) conditions.push(lte(vehicleRequests.plannedStartAt, new Date(`${to}T23:59:59+07:00`)));
-    if (vehicleId) conditions.push(eq(vehicleRequests.vehicleId, vehicleId));
+    if (from) conditions.push(gte(trips.checkedOutAt, new Date(`${from}T00:00:00+07:00`)));
+    if (to) conditions.push(lte(trips.checkedOutAt, new Date(`${to}T23:59:59+07:00`)));
+    if (vehicleId) conditions.push(eq(trips.vehicleId, vehicleId));
 
     const rows = await db
-      .select({ r: vehicleRequests, v: vehicles, u: users })
-      .from(vehicleRequests)
-      .innerJoin(users, eq(users.id, vehicleRequests.requesterId))
-      .leftJoin(vehicles, eq(vehicles.id, vehicleRequests.vehicleId))
+      .select({ t: trips, v: vehicles, u: users })
+      .from(trips)
+      .innerJoin(users, eq(users.id, trips.driverId))
+      .innerJoin(vehicles, eq(vehicles.id, trips.vehicleId))
       .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(asc(vehicleRequests.plannedStartAt))
+      .orderBy(asc(trips.checkedOutAt))
       .limit(5000);
 
-    const inspectionRows = await db.select().from(inspections);
-    const byRequest = new Map<string, { before?: number; after?: number; fuelBefore?: number; fuelAfter?: number }>();
-    for (const i of inspectionRows) {
-      const entry = byRequest.get(i.requestId) ?? {};
-      if (i.phase === "BEFORE") {
-        entry.before = i.odometer;
-        entry.fuelBefore = i.fuelLevel;
-      } else {
-        entry.after = i.odometer;
-        entry.fuelAfter = i.fuelLevel;
-      }
-      byRequest.set(i.requestId, entry);
-    }
-
     const header = [
-      "เลขที่คำขอ",
+      "เลขที่",
       "สถานะ",
-      "ผู้ขอ",
+      "ผู้ใช้รถ",
       "อีเมล",
       "รถ",
       "ทะเบียน",
-      "เริ่ม",
-      "สิ้นสุด",
+      "เอารถออกเมื่อ",
+      "คืนรถเมื่อ",
       "วัตถุประสงค์",
       "จุดหมาย",
       "ผู้โดยสาร",
-      "เลขไมล์ก่อน",
-      "เลขไมล์หลัง",
+      "เลขไมล์ออก",
+      "เลขไมล์คืน",
       "ระยะทาง (กม.)",
-      "น้ำมันก่อน (%)",
-      "น้ำมันหลัง (%)",
-      "ความเสียหายใหม่",
-      "รับรถเมื่อ",
-      "คืนรถเมื่อ",
-      "ปิดงานเมื่อ",
+      "น้ำมันออก (%)",
+      "น้ำมันคืน (%)",
+      "ความเสียหาย",
+      "รายละเอียดความเสียหาย",
+      "หมายเหตุ",
     ];
 
     const lines = [header.map(csvCell).join(",")];
-    for (const { r, v, u } of rows) {
-      const odo = byRequest.get(r.id) ?? {};
-      const distance =
-        odo.before !== undefined && odo.after !== undefined ? odo.after - odo.before : "";
+    for (const { t, v, u } of rows) {
+      const distance = t.odometerIn !== null ? t.odometerIn - t.odometerOut : "";
       lines.push(
         [
-          r.requestNo,
-          STATUS_LABEL_MAP[r.status] ?? r.status,
+          t.tripNo,
+          STATUS_LABEL_MAP[t.status] ?? t.status,
           u.name,
           u.email,
-          v ? `${v.brand} ${v.model ?? ""}`.trim() : "",
-          v?.plateNumber ?? "",
-          fmtDateTime(r.plannedStartAt),
-          fmtDateTime(r.plannedEndAt),
-          r.purpose,
-          r.destination,
-          r.passengerCount,
-          odo.before ?? "",
-          odo.after ?? "",
+          `${v.brand} ${v.model ?? ""}`.trim(),
+          v.plateNumber,
+          fmtDateTime(t.checkedOutAt),
+          t.returnedAt ? fmtDateTime(t.returnedAt) : "",
+          t.purpose,
+          t.destination,
+          t.passengerCount,
+          t.odometerOut,
+          t.odometerIn ?? "",
           distance,
-          odo.fuelBefore ?? "",
-          odo.fuelAfter ?? "",
-          r.hasNewDamage ? "มี" : "",
-          r.checkedOutAt ? fmtDateTime(r.checkedOutAt) : "",
-          r.returnedAt ? fmtDateTime(r.returnedAt) : "",
-          r.completedAt ? fmtDateTime(r.completedAt) : "",
+          t.fuelOut,
+          t.fuelIn ?? "",
+          t.hasDamage ? "มี" : "",
+          t.damageNote ?? "",
+          t.note ?? "",
         ]
           .map(csvCell)
           .join(",")
