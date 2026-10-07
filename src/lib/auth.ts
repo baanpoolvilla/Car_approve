@@ -91,7 +91,12 @@ export async function checkEmail(rawEmail: string) {
 }
 
 /** Step 2a: first-time setup — the person chooses their own PIN. */
-export async function setPin(rawEmail: string, pin: string, confirmPin: string) {
+export async function setPin(
+  rawEmail: string,
+  pin: string,
+  confirmPin: string,
+  opts: { embed?: boolean } = {}
+) {
   const user = await findActiveUser(rawEmail);
   if (user.pinHash) throw new LoginError("บัญชีนี้ตั้งรหัสไว้แล้ว กรุณาเข้าสู่ระบบด้วยรหัสเดิม");
   if (pin !== confirmPin) throw new LoginError("รหัสทั้งสองช่องไม่ตรงกัน");
@@ -110,12 +115,12 @@ export async function setPin(rawEmail: string, pin: string, confirmPin: string) 
     })
     .where(eq(users.id, user.id));
 
-  await createSession(user.id);
+  await createSession(user.id, opts);
   return user;
 }
 
 /** Step 2b: normal login with the PIN the person set. */
-export async function loginWithPin(rawEmail: string, pin: string) {
+export async function loginWithPin(rawEmail: string, pin: string, opts: { embed?: boolean } = {}) {
   const user = await findActiveUser(rawEmail);
   assertNotLocked(user.lockedUntil);
   if (!user.pinHash) throw new LoginError("ยังไม่ได้ตั้งรหัส กรุณาตั้งรหัสก่อนเข้าใช้งาน");
@@ -145,7 +150,7 @@ export async function loginWithPin(rawEmail: string, pin: string) {
       .where(eq(users.id, user.id));
   }
 
-  await createSession(user.id);
+  await createSession(user.id, opts);
   return user;
 }
 

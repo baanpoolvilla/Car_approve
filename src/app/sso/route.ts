@@ -80,5 +80,29 @@ export async function GET(req: Request) {
     entityId: user.id,
     action: "LOGIN_SSO",
   });
-  return to("/");
+
+  /*
+   * ตอบเป็นหน้า 200 ที่พาไปหน้าแรกเอง — **ไม่ redirect (307) ทันที**
+   *
+   * เดิม: ตั้ง cookie แล้ว redirect ไป "/" ในคำตอบเดียวกัน — ในกรอบ (cookie แบบ Partitioned) เบราว์เซอร์
+   * ยังไม่ส่ง cookie ที่เพิ่งได้ไปกับคำขอที่ redirect ต่อทันที หน้าแรกเลยมองว่ายังไม่ล็อกอิน เด้งไป /login
+   * ต้องกดรีเฟรชเองอีกรอบถึงจะเข้า (เจอจริง 2026-10-07) · ให้ cookie ถูกเก็บจากคำตอบ 200 ก่อน
+   * แล้วค่อยเปิดหน้าแรกเป็นคำขอใหม่ = cookie ไปด้วยแน่นอน
+   */
+  return new NextResponse(
+    `<!doctype html><html lang="th"><head><meta charset="utf-8">` +
+      `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+      `<meta http-equiv="refresh" content="0;url=/">` +
+      `<title>กำลังเข้าสู่ระบบ…</title></head>` +
+      `<body style="font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;color:#475569">` +
+      `กำลังเข้าสู่ระบบ…<script>location.replace("/")</script></body></html>`,
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+      },
+    }
+  );
 }

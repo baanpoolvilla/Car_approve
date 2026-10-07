@@ -89,10 +89,18 @@ export default function LoginForm() {
     setBusy(true);
     setError(null);
     try {
+      // เปิดอยู่ในกรอบ (ข้างใน SmartBoss) ไหม — เซิร์ฟเวอร์ต้องออก cookie อีกแบบถึงจะใช้ในกรอบได้
+      // (ดู createSession ใน lib/auth.ts) ไม่บอก = ล็อกอินถูกแล้วแต่เด้งกลับหน้านี้วนไป
+      const embed = window.self !== window.top;
       if (step === "set-pin") {
-        await post("/api/auth/set-pin", { email, pin, confirmPin });
+        await post("/api/auth/set-pin", { email, pin, confirmPin, embed });
       } else {
-        await post("/api/auth/login", { email, pin });
+        await post("/api/auth/login", { email, pin, embed });
+      }
+      if (embed) {
+        // โหลดหน้าใหม่ทั้งหน้า — ให้คำขอถัดไปพก cookie ที่เพิ่งได้ไปแน่ ๆ
+        window.location.replace("/");
+        return;
       }
       router.replace("/");
       router.refresh();
