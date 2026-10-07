@@ -149,6 +149,21 @@ export async function loginWithPin(rawEmail: string, pin: string) {
   return user;
 }
 
+/**
+ * เข้าสู่ระบบจาก SmartBoss (SSO) — ตัวตนยืนยันมาแล้วด้วย token ที่ SmartBoss เซ็น (ดู app/sso/route.ts)
+ * จึงไม่ถามรหัส 6 หลัก · **ไม่สร้างบัญชีให้เอง**: ต้องเป็นอีเมลที่ผู้ดูแลระบบเพิ่มไว้แล้วและยังเปิดใช้งาน
+ * (กติกาเดิมของระบบนี้ — SmartBoss มีหลายบริษัท คนที่ล็อกอิน SmartBoss ได้ไม่ได้แปลว่าใช้รถบริษัทนี้ได้)
+ * คืน null เมื่อไม่มีบัญชี/ถูกปิด
+ */
+export async function loginWithSso(rawEmail: string, opts: { embed: boolean }) {
+  const email = rawEmail.trim().toLowerCase();
+  if (!email) return null;
+  const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+  if (!user || !user.isActive) return null;
+  await createSession(user.id, { embed: opts.embed });
+  return user;
+}
+
 /** Change your own PIN from inside the app. */
 export async function changePin(userId: string, currentPin: string, newPin: string) {
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
@@ -177,7 +192,13 @@ export async function clearPin(userId: string) {
 
 /* -------------------------------------------------------------- sessions */
 
-export async function createSession(userId: string) {
+/**
+ * `embed` = เปิดอยู่ในกรอบ (iframe) ข้างใน SmartBoss — cookie แบบปกติ (SameSite=Lax) เบราว์เซอร์ไม่ส่งให้
+ * เว็บที่อยู่ในกรอบของอีกเว็บ ล็อกอินผ่านแล้วหน้าถัดไปก็ไม่เห็น cookie เด้งกลับหน้า login วนไป
+ * (เจอจริงบน iPhone) ⇒ ในกรอบใช้ SameSite=None; Secure; Partitioned: cookie ผูกกับ "เว็บรถที่อยู่ใน
+ * SmartBoss" เท่านั้น เว็บอื่นเอาไปใช้ไม่ได้ · เปิดเว็บรถตรง ๆ ยังใช้ cookie แบบ Lax ตามเดิม
+ */
+export async function createSession(userId: string, opts: { embed?: boolean } = {}) {
   const token = randomBytes(32).toString("base64url");
   const meta = await clientMeta();
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86_400_000);
@@ -193,10 +214,11 @@ export async function createSession(userId: string) {
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
+    ...(opts.embed
+      ? { sameSite: "none" as const, secure: true, partitioned: true }
+      : { sameSite: "lax" as const, secure: process.env.NODE_ENV === "production" }),
   });
   return token;
 }
